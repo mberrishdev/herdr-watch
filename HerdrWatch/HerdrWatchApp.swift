@@ -15,7 +15,15 @@ import SwiftUI
         _store = StateObject(wrappedValue: WatchStore())
     }
     var body: some Scene {
-        WindowGroup { Dashboard().environmentObject(store) }
+        WindowGroup {
+            #if DEBUG
+            if ProcessInfo.processInfo.environment["HERDRWATCH_OUTPUT_PREVIEW"] == "1" {
+                OutputPreviewRoot().environmentObject(store)
+            } else { Dashboard().environmentObject(store) }
+            #else
+            Dashboard().environmentObject(store)
+            #endif
+        }
         #if os(macOS)
         .defaultSize(width: 440, height: 820)
         #endif
@@ -74,16 +82,12 @@ struct Dashboard: View {
                     }
                     ForEach(snapshot.workspaces) { workspace in
                         Section(workspace.label.isEmpty ? "Workspace" : workspace.label) {
-                            Text("\(workspace.tab_count) tabs · \(workspace.pane_count) panes · \(statusLabel(workspace.agent_status))").font(.caption).foregroundStyle(.secondary)
+                            Text("\(workspace.tab_count) tabs · \(workspace.pane_count) panes · \(statusLabel(workspace.agent_status))").font(.subheadline).foregroundStyle(.secondary)
                             ForEach(snapshot.tabs.filter { $0.workspace_id == workspace.id }) { tab in
-                                Text("Tab \(tab.label ?? tab.id) · \(snapshot.panes.filter { $0.tab_id == tab.id }.count) panes").font(.caption.monospaced()).lineLimit(2)
+                                Text("\(tab.label.map { "Tab " + $0 } ?? "Terminal tab") · \(snapshot.panes.filter { $0.tab_id == tab.id }.count) panes").font(.subheadline).foregroundStyle(.secondary)
                             }
                             ForEach(snapshot.agents.filter { $0.workspace_id == workspace.id }) { agent in
-                                VStack(alignment: .leading, spacing: 5) {
-                                    HStack { Text(agent.title).font(.headline); Spacer(); Text(statusLabel(agent.agent_status)).font(.caption) }
-                                    if let cwd = agent.cwd { Text(cwd).font(.caption.monospaced()).foregroundStyle(.secondary) }
-                                    Text("Pane \(agent.pane_id)").font(.caption2.monospaced()).foregroundStyle(.secondary)
-                                }.textSelection(.enabled)
+                                AgentSessionRow(agent: agent)
                             }
                         }
                     }
@@ -188,5 +192,31 @@ struct HostSettings: View {
         #if os(macOS)
         .frame(minWidth: 340, minHeight: 550)
         #endif
+    }
+}
+
+struct AgentSessionRow: View {
+    @EnvironmentObject var store: WatchStore
+    let agent: Agent
+    private var kind: String { agent.agent?.capitalized ?? "Agent" }
+    var body: some View {
+        NavigationLink {
+            AgentOutputView(target: OutputTarget(agent: agent, scope: store.outputScope))
+        } label: {
+            VStack(alignment: .leading, spacing: 9) {
+                HStack {
+                    Label(kind, systemImage: "terminal").font(.headline)
+                    Spacer(minLength: 8)
+                    AgentStatusBadge(status: agent.agent_status)
+                }
+                if agent.title.lowercased() != kind.lowercased() {
+                    Text(agent.title).font(.subheadline).lineLimit(2)
+                }
+                if let cwd = agent.cwd {
+                    Text(verbatim: cwd).font(.subheadline).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle)
+                }
+                Text("Open session").font(.subheadline.weight(.medium)).foregroundStyle(.tint)
+            }.padding(.vertical, 8)
+        }.accessibilityHint("Opens read-only terminal output")
     }
 }

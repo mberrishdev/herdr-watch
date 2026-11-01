@@ -17,7 +17,7 @@ xcodebuild -project HerdrWatch.xcodeproj -scheme HerdrWatch -sdk iphonesimulator
 1. Open Host settings and enter the SSH hostname/IP, port and username. The app doesn't configure Tailscale; establish your private-network route separately.
 2. Enter your SSH password. Passwords are saved only in device-only Keychain, scoped to host, port and username. The SSH server must allow password authentication; keyboard-interactive/MFA login is not implemented. SSH credentials grant your host account's authority, even though this app exposes only read operations.
 3. Save, connect, and compare the displayed host-key SHA-256 fingerprint using an independent trusted channel before trusting it. For example, inspect the relevant host public key with `ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub -E sha256` on the host.
-4. Choose a running session. Refresh manually or leave the app active for 15-second foreground polling.
+4. Choose a running session. Refresh manually or leave the app active for 15-second foreground polling. Tap an agent row to open its real terminal screen.
 
 Unknown host keys abort the handshake before authentication and require explicit trust plus a new connection. Changed keys fail closed; independently verify rotation before using Forget trusted host key. Passwords and exact trusted public keys use non-synchronizing `WhenUnlockedThisDeviceOnly` Keychain records. Host address/port/username alone use preferences. No output/snapshot is persisted, no credentials or host output are logged, and no agent forwarding is enabled. Delete saved SSH password removes the locally stored password.
 
@@ -25,7 +25,7 @@ On macOS/Linux, the fixed SSH launcher prepends `$HOME/.local/bin`, `/opt/homebr
 
 Runtime detection prefers `herdr-core` when installed; otherwise it probes the upstream `herdr` bridge. The desktop profile supports the **default core session** and verifies the running server's generation, version and required methods with `hello`. It reads `terminal.list` and the desktop app's `herdr-app` layout via `doc.get`, reconstructing workspace/tab/pane locations. Live terminals absent from that document appear in a clearly labeled "Other live terminals" group. Shells without an agent status or recognized agent process are not counted as agents. The core's standard default-session socket must already exist; this app never runs a server-start command. Other core versions and named core sessions remain outside this profile.
 
-The read allowlist contains runtime probing, those three core JSON-RPC reads, upstream bridge probing, `herdr session list --json`, and `session.snapshot`. Named sessions use a strict argument allowlist. Each snapshot opens a fresh non-PTY exec channel over the current connection, writes one NDJSON request to stdin, keeps stdin open until the reply, and closes the channel after the first response line. Response buffering is capped at 1 MiB; stderr is discarded with an 8 KiB limit; a 15-second deadline closes the connection. No commands to start, stop, update or modify Herdr are available.
+The read allowlist contains runtime probing, those core JSON-RPC reads plus `terminal.read`, upstream `agent.read`, upstream bridge probing, `herdr session list --json`, and `session.snapshot`. Named sessions use a strict argument allowlist. Each snapshot opens a fresh non-PTY exec channel over the current connection, writes one NDJSON request to stdin, keeps stdin open until the reply, and closes the channel after the first response line. Response buffering is capped at 1 MiB; stderr is discarded with an 8 KiB limit; a 15-second deadline closes the connection. No commands to start, stop, update or modify Herdr are available.
 
 ## Validation
 
@@ -35,4 +35,12 @@ The read allowlist contains runtime probing, those three core JSON-RPC reads, up
 xcodebuild -project HerdrWatch.xcodeproj -scheme HerdrWatchPreview -derivedDataPath .build test
 ```
 
-Tests cover protocol/response gating, shell-injection rejection, session states and host-key trust/mismatch. Physical iPhone networking, device Keychain behavior, real host authentication, and remote bridge behavior on each intended OS remain release acceptance gates. Each profile deliberately rejects unvalidated versions/generations. No agent-output detail, instructions, approval controls or background monitoring are included in this increment.
+Tests cover protocol/response gating, shell-injection rejection, session states and host-key trust/mismatch. Physical iPhone networking, device Keychain behavior, real host authentication, and remote bridge behavior on each intended OS remain release acceptance gates. Each profile deliberately rejects unvalidated versions/generations. Instructions, approval controls and background monitoring are not included.
+
+## Agent screen
+
+Tap **Open session** on an agent row. The detail view polls every five seconds while visible and active. Desktop core reads use `terminal.read` with zero history lines, so they do not scroll the laptop terminal or send keystrokes. The upstream profile reads up to 100 recent lines. Reads revalidate the host, session, current agent location and desktop core identity; a changed target is rejected. The response has the transport's 1 MiB limit, terminal controls are removed, and the display is capped at the newest 32 KiB with visible partial/truncation notices. Text is inert and selectable; output is held only in the view's memory and cleared when leaving/inactive.
+
+Terminal text defaults to a larger monospaced font with wrapped lines and trimmed trailing screen padding. The **Aa** menu changes text size or restores fixed columns by disabling wrapping. Those presentation preferences use ordinary local settings; session metadata is available under **Session details**.
+
+A Debug-only `HERDRWATCH_CORE_PREVIEW=1` alongside `HERDRWATCH_PREVIEW=1` selects sample desktop data. Add `HERDRWATCH_OUTPUT_PREVIEW=1` to open the sample terminal detail directly for visual checks. These flags do not connect to a real host and are ignored by release builds.

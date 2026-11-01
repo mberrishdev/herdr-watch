@@ -21,6 +21,7 @@
 		74403E2CDFA9A5BA5084EC95 /* NIOSSH in Frameworks */ = {isa = PBXBuildFile; productRef = 6AC84C87F5F5D6B127D28928 /* NIOSSH */; };
 		7E014007D211CCED83539BF9 /* Transport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 93B50560A0C472BDDE4052AB /* Transport.swift */; };
 		838D9EF3991204BADB764A45 /* HerdrWatchTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8745574F4054851D615918CC /* HerdrWatchTests.swift */; };
+		857BAE92AF1B5AE90651983D /* AgentOutput.swift in Sources */ = {isa = PBXBuildFile; fileRef = FD5C50F9765DD3D0BF9420DC /* AgentOutput.swift */; };
 		884EDABC0E7BCE629575B5E5 /* Transport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 93B50560A0C472BDDE4052AB /* Transport.swift */; };
 		9F55D80A4DB46D03A249E708 /* CoreAdapter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1345C5410DB212432EB34D4A /* CoreAdapter.swift */; };
 		A5300D5821198A97CF16DB52 /* HerdrWatchApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 38EB4E1FFC796C3B019C3E5E /* HerdrWatchApp.swift */; };
@@ -29,6 +30,7 @@
 		C7825AC2F3D232148DB92981 /* Citadel in Frameworks */ = {isa = PBXBuildFile; productRef = 6FE30C1A71BF1C5FB4D15683 /* Citadel */; };
 		CA100937E78BB4DA71DFE826 /* PreviewFixture.swift in Sources */ = {isa = PBXBuildFile; fileRef = 674AE5E99BE2D4BBD3901AB0 /* PreviewFixture.swift */; };
 		E16D542CA39C66E99FBADFEF /* NIOSSH in Frameworks */ = {isa = PBXBuildFile; productRef = 9D7E3A6CD857601562300EE9 /* NIOSSH */; };
+		EFD0312EA2B490127F638E60 /* AgentOutput.swift in Sources */ = {isa = PBXBuildFile; fileRef = FD5C50F9765DD3D0BF9420DC /* AgentOutput.swift */; };
 		F8225B0FA51CA22BB49DF625 /* Store.swift in Sources */ = {isa = PBXBuildFile; fileRef = B84419E57A5FCB6013F52B7C /* Store.swift */; };
 /* End PBXBuildFile section */
 
@@ -54,6 +56,7 @@
 		B4F5C2373C94E706C78AEFFB /* HerdrWatchPreview.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = HerdrWatchPreview.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		B84419E57A5FCB6013F52B7C /* Store.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Store.swift; sourceTree = "<group>"; };
 		D2F4058F56A8D257D4222D4D /* HerdrWatch.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = HerdrWatch.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		FD5C50F9765DD3D0BF9420DC /* AgentOutput.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentOutput.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -85,6 +88,7 @@
 		1417ABEB081B768AF3FC5B92 /* HerdrWatch */ = {
 			isa = PBXGroup;
 			children = (
+				FD5C50F9765DD3D0BF9420DC /* AgentOutput.swift */,
 				1345C5410DB212432EB34D4A /* CoreAdapter.swift */,
 				38EB4E1FFC796C3B019C3E5E /* HerdrWatchApp.swift */,
 				6A9D0A4288EB61475390EFB0 /* Models.swift */,
@@ -235,6 +239,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				857BAE92AF1B5AE90651983D /* AgentOutput.swift in Sources */,
 				3826AD6DEB44814C45D451D7 /* CoreAdapter.swift in Sources */,
 				01D5362CA674F6B505578EC3 /* HerdrWatchApp.swift in Sources */,
 				5F1C6D2DC11CD3B1372902CD /* Models.swift in Sources */,
@@ -257,6 +262,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				EFD0312EA2B490127F638E60 /* AgentOutput.swift in Sources */,
 				9F55D80A4DB46D03A249E708 /* CoreAdapter.swift in Sources */,
 				A5300D5821198A97CF16DB52 /* HerdrWatchApp.swift in Sources */,
 				004E73FE999188FAD834217A /* Models.swift in Sources */,

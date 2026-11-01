@@ -4,6 +4,8 @@ import SwiftUI
     var isPreview = false
     @Published var runtimeLabel = ""
     private var coreProfile = false
+    private var coreIdentity: String?
+    private var coreCanRead = false
     @Published var host: Host
     @Published var sessions: [Session] = []
     @Published var selected: String?
@@ -22,6 +24,7 @@ import SwiftUI
     }
     func connect() async {
         guard !busy else { return }
+        generation = UUID()
         let attempt = generation
         busy = true; message = nil; pendingKey = nil; stale = true
         defer { busy = false }
@@ -41,6 +44,7 @@ import SwiftUI
                 runtimeLabel = "Herdr desktop · herdr-core 0.1.16"
             } else if runtime == "herdr-api-bridge-v1" {
                 coreProfile = false
+                coreIdentity = nil
                 runtimeLabel = "Herdr CLI · upstream 0.9.5 / protocol 22"
             } else { throw WatchError.message("Unsupported Herdr runtime. Supported profiles: herdr-core 0.1.16 or upstream Herdr 0.9.5.") }
             stage = .snapshot
@@ -57,11 +61,12 @@ import SwiftUI
     private func discover() async throws {
         let attempt = generation
         if coreProfile {
-            try CoreAdapter.verify(await transport.execute(.coreHello))
+            let hello = try CoreAdapter.verify(await transport.execute(.coreHello))
             let terminals = try await transport.execute(.coreTerminals)
             let document = try await transport.execute(.coreLayout)
             let value = try CoreAdapter.snapshot(terminals: terminals, document: document)
             guard attempt == generation else { throw CancellationError() }
+            coreIdentity = hello.core.id; coreCanRead = hello.methods.contains("terminal.read")
             sessions = [Session(name: "default", default: true, running: true, connection_error: nil)]
             selected = "default"; snapshot = value; observed = Date(); stale = false
             return
@@ -82,6 +87,38 @@ import SwiftUI
         let value = try Wire.snapshot(await transport.execute(.snapshot(session)))
         guard attempt == generation else { throw CancellationError() }
         snapshot = value; observed = Date(); stale = false
+    }
+    var outputScope: OutputScope { OutputScope(host: host, session: selected ?? "default", coreIdentity: coreIdentity) }
+    func readOutput(for target: OutputTarget) async throws -> TerminalOutput? {
+        guard connected, !busy else { return nil }
+        guard target.scope == outputScope else { throw WatchError.message("The host or session changed. Go back and open the current agent.") }
+        let attempt = generation
+        busy = true
+        defer { busy = false }
+        do {
+            try await discover()
+            guard attempt == generation, connected else { throw CancellationError() }
+            guard target.scope == outputScope, snapshot?.agents.contains(where: {
+                $0.id == target.agent.id && $0.pane_id == target.agent.pane_id && $0.workspace_id == target.agent.workspace_id
+            }) == true else { throw WatchError.message("This agent is no longer in the current snapshot. Go back and refresh the dashboard.") }
+            let operation: ReadOperation
+            if coreProfile {
+                guard coreCanRead else { throw WatchError.message("This Herdr core does not offer terminal screen reads.") }
+                operation = .coreOutput(target.agent.terminal_id)
+            } else {
+                guard let session = sessions.first(where: { $0.id == selected }) else { throw WatchError.message("Session is unavailable.") }
+                operation = .agentOutput(session, target.agent.terminal_id)
+            }
+            let data = try await transport.execute(operation)
+            guard attempt == generation, target.scope == outputScope, connected else { throw CancellationError() }
+            return try TerminalOutput.decode(data, core: coreProfile, agent: target.agent)
+        } catch let error as WatchError { throw error }
+        catch is CancellationError { throw CancellationError() }
+        catch {
+            stale = true; connected = false
+            await transport.disconnect()
+            throw WatchError.message(ConnectionFailure.message(error, stage: .output))
+        }
     }
     func refresh() async {
         guard connected, !busy else { return }

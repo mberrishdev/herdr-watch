@@ -77,6 +77,9 @@ private final class ClosingExecFixture: ChannelInboundHandler {
             if input == ReadOperation.coreHello.stdin { response = CoreSampleData.hello }
             else if input == ReadOperation.coreTerminals.stdin { response = CoreSampleData.terminals }
             else if input == ReadOperation.coreLayout.stdin { response = CoreSampleData.layout }
+            else if let request = try? JSONSerialization.jsonObject(with: input) as? [String: Any],
+                    request["method"] as? String == "terminal.read",
+                    let params = request["params"] as? [String: Any], params["terminal"] as? String == "t2", params["lines"] as? Int == 0 { response = CoreSampleData.output }
             else { reply(context.channel, text: "", status: 1); return }
             reply(context.channel, text: String(decoding: response, as: UTF8.self) + "\n", status: 0)
             return
@@ -138,6 +141,9 @@ extension HerdrWatchTests {
             let coreSnapshot = try CoreAdapter.snapshot(terminals: terminals, document: document)
             XCTAssertEqual(coreSnapshot.workspaces.count, 2)
             XCTAssertEqual(coreSnapshot.agents.count, 2)
+            let agent = try XCTUnwrap(coreSnapshot.agents.first)
+            let output = try TerminalOutput.decode(await client.execute(.coreOutput(agent.terminal_id)), core: true, agent: agent)
+            XCTAssertTrue(output.text.contains("Add a read-only terminal screen"))
             await client.disconnect()
         } catch { XCTFail("Pinned password login failed: \(String(reflecting: error))") }
         do {
@@ -197,5 +203,49 @@ extension HerdrWatchTests {
         await store.connect()
         XCTAssertFalse(store.stale)
         XCTAssertEqual(store.snapshot?.agents.count, 2)
+    }
+}
+
+extension HerdrWatchTests {
+    func testOutputRequestsAreReadOnlyAndStdinEncoded() throws {
+        let target = "t1'; echo injected\nwith spaces"
+        let operation = ReadOperation.coreOutput(target)
+        XCTAssertEqual(try operation.command, ReadOperation.coreCommand)
+        XCTAssertFalse(try operation.command.contains(target))
+        let request = try XCTUnwrap(JSONSerialization.jsonObject(with: try XCTUnwrap(operation.stdin)) as? [String: Any])
+        XCTAssertEqual(request["method"] as? String, "terminal.read")
+        let params = try XCTUnwrap(request["params"] as? [String: Any])
+        XCTAssertEqual(params["terminal"] as? String, target)
+        XCTAssertEqual(params["lines"] as? Int, 0)
+        XCTAssertNil(params["caller"])
+        XCTAssertThrowsError(try ReadOperation.coreOutput(String(repeating: "t", count: 257)).command)
+    }
+    func testTerminalOutputSanitizationAndByteCap() throws {
+        let raw = "before\u{1b}[31mred\u{1b}[0m\u{1b}]52;c;secret\u{7}\u{1b}]8;;https://example.com\u{1b}\\link\u{1b}]8;;\u{1b}\\\u{1b}Pdiscard\u{1b}\\\u{202E} after\r\n"
+        XCTAssertEqual(PlainTerminalText.clean(raw), "beforeredlink after\n")
+        XCTAssertEqual(PlainTerminalText.clean("safe\u{1b}]unfinished"), "safe")
+        let agent = Agent(terminal_id: "t2", workspace_id: "w1", pane_id: "p1", name: nil, agent: "codex", cwd: nil, agent_status: "working")
+        let data = try JSONSerialization.data(withJSONObject: ["jsonrpc": "2.0", "id": "core-output", "result": ["text": String(repeating: "🌱", count: 10000), "complete": false, "how": "screen"]])
+        let output = try TerminalOutput.decode(data, core: true, agent: agent)
+        XCTAssertLessThanOrEqual(output.text.utf8.count, 32768)
+        XCTAssertTrue(output.truncated)
+        XCTAssertTrue(output.partial)
+        XCTAssertFalse(output.text.contains("�"))
+    }
+    @MainActor func testOutputCannotCrossHostsAndSurvivesSameHostReconnect() async throws {
+        let store = WatchStore(transport: PreviewTransport(core: true))
+        store.isPreview = true
+        store.host = Host(address: "fixture", port: 22, username: "tester")
+        await store.connect()
+        let target = OutputTarget(agent: try XCTUnwrap(store.snapshot?.agents.first), scope: store.outputScope)
+        let first = try await store.readOutput(for: target)
+        XCTAssertTrue(try XCTUnwrap(first).text.contains("Add a read-only terminal screen"))
+        await store.suspend()
+        await store.connect()
+        let resumed = try await store.readOutput(for: target)
+        XCTAssertNotNil(resumed)
+        store.host = Host(address: "another-host", port: 22, username: "tester")
+        do { _ = try await store.readOutput(for: target); XCTFail("A different host must not receive the old target") }
+        catch let error as WatchError { XCTAssertTrue(error.localizedDescription.contains("host or session changed")) }
     }
 }

@@ -95,6 +95,7 @@ import Darwin
 }
 
 enum ConnectionStage: String {
+    case output = "Terminal screen read"
     case ssh = "SSH connection"
     case bridge = "Herdr bridge check"
     case snapshot = "Herdr session discovery / snapshot"

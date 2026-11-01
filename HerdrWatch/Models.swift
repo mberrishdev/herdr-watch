@@ -75,6 +75,7 @@ enum ReadOperation {
     static let launcher = "PATH=\"$HOME/.local/bin:/opt/homebrew/bin:/usr/local/bin:$PATH\" exec herdr"
     case runtime, coreHello, coreTerminals, coreLayout
     case sessions, probe, snapshot(Session)
+    case coreOutput(String), agentOutput(Session, String)
     static let pathSetup = "PATH=\"$HOME/.local/bin:/opt/homebrew/bin:/usr/local/bin:$PATH\"; export PATH; "
     static let coreCommand = pathSetup + "if [ ! -S \"${XDG_STATE_HOME:-$HOME/.local/state}/herdr-core/default/default.sock\" ]; then exit 69; fi; exec herdr-core connect --session default"
     var command: String {
@@ -82,6 +83,12 @@ enum ReadOperation {
             switch self {
             case .runtime: return Self.pathSetup + "if command -v herdr-core >/dev/null 2>&1; then exec herdr-core --version; else exec herdr remote-api-bridge --check; fi"
             case .coreHello, .coreTerminals, .coreLayout: return Self.coreCommand
+            case .coreOutput(let target):
+                try Self.validateTarget(target)
+                return Self.coreCommand
+            case .agentOutput(let session, let target):
+                try Self.validateTarget(target)
+                return try Self.snapshot(session).command
             case .sessions: return "\(Self.launcher) session list --json"
             case .probe: return "\(Self.launcher) remote-api-bridge --check"
             case .snapshot(let session):
@@ -90,9 +97,22 @@ enum ReadOperation {
             }
         }
     }
+    private static func validateTarget(_ target: String) throws {
+        guard !target.isEmpty, target.utf8.count <= 256, !target.contains("\0") else { throw WatchError.message("Invalid terminal identity.") }
+    }
+    private static func json(_ object: [String: Any]) -> Data {
+        // Only JSON primitives are constructed here; no arbitrary Encodable values.
+        var data = try! JSONSerialization.data(withJSONObject: object)
+        data.append(10)
+        return data
+    }
     var stdin: Data? {
         let request: String?
         switch self {
+        case .coreOutput(let target):
+            return Self.json(["jsonrpc": "2.0", "id": "core-output", "method": "terminal.read", "params": ["terminal": target, "lines": 0]])
+        case .agentOutput(_, let target):
+            return Self.json(["id": "agent-output", "method": "agent.read", "params": ["target": target, "source": "recent_unwrapped", "lines": 100, "format": "text", "strip_ansi": true]])
         case .coreHello: request = #"{"jsonrpc":"2.0","id":"core-hello","method":"hello","params":{"generation":1,"framed":false}}"#
         case .coreTerminals: request = #"{"jsonrpc":"2.0","id":"core-terminals","method":"terminal.list","params":{}}"#
         case .coreLayout: request = #"{"jsonrpc":"2.0","id":"core-layout","method":"doc.get","params":{"name":"herdr-app"}}"#

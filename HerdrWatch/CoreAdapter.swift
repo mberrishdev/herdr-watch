@@ -4,6 +4,8 @@ import Foundation
 /// Its JSON-RPC generation 1 is not upstream Herdr's protocol 22.
 enum CoreAdapter {
     struct Hello: Decodable {
+        struct Identity: Decodable { let id: String }
+        let core: Identity
         let version: String
         let generation: Int
         let methods: [String]
@@ -44,11 +46,12 @@ enum CoreAdapter {
         let envelope = try JSONDecoder().decode(CoreEnvelope<T>.self, from: data)
         return envelope.result
     }
-    static func verify(_ data: Data) throws {
+    @discardableResult static func verify(_ data: Data) throws -> Hello {
         let hello = try result(Hello.self, from: data, id: "core-hello")
         guard hello.generation == 1, hello.version == "0.1.16", ["terminal.list", "doc.get"].allSatisfy(hello.methods.contains) else {
             throw WatchError.message("Unsupported Herdr desktop runtime. This profile requires herdr-core 0.1.16 / generation 1 with terminal.list and doc.get.")
         }
+        return hello
     }
     static func snapshot(terminals: Data, document: Data) throws -> Snapshot {
         let list = try result(TerminalList.self, from: terminals, id: "core-terminals")
