@@ -1,0 +1,17 @@
+# Build products
+.build*/
+DerivedData/
+.swiftpm/
+
+# Local research and generated artifacts
+research/
+output/
+
+# Xcode user state
+xcuserdata/
+*.xcuserstate
+
+# Local secrets and OS files
+.env
+.env.*
+.DS_Store

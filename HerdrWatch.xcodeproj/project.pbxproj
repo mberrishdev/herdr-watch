@@ -1,0 +1,620 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		004E73FE999188FAD834217A /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6A9D0A4288EB61475390EFB0 /* Models.swift */; };
+		01D5362CA674F6B505578EC3 /* HerdrWatchApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 38EB4E1FFC796C3B019C3E5E /* HerdrWatchApp.swift */; };
+		09CD202C7680D00396671DF1 /* Security.swift in Sources */ = {isa = PBXBuildFile; fileRef = 45F19DB364F1A9DFE22CE13D /* Security.swift */; };
+		1E3969C9829E9CF17E44C85E /* Crypto in Frameworks */ = {isa = PBXBuildFile; productRef = D4E6D5AAD1D397271776A1DA /* Crypto */; };
+		2843E9CAEFE379951F299A85 /* PreviewFixture.swift in Sources */ = {isa = PBXBuildFile; fileRef = 674AE5E99BE2D4BBD3901AB0 /* PreviewFixture.swift */; };
+		2BE27FD1075E965200567FE2 /* Citadel in Frameworks */ = {isa = PBXBuildFile; productRef = 9BF0112752F5A2FEC49733FE /* Citadel */; };
+		2F2CCAE0AF3724E89250FF29 /* Crypto in Frameworks */ = {isa = PBXBuildFile; productRef = 141481B5F9CB3224F0A14FC8 /* Crypto */; };
+		3826AD6DEB44814C45D451D7 /* CoreAdapter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1345C5410DB212432EB34D4A /* CoreAdapter.swift */; };
+		5942FB3B386DE9140D96A4C4 /* Security.swift in Sources */ = {isa = PBXBuildFile; fileRef = 45F19DB364F1A9DFE22CE13D /* Security.swift */; };
+		5B294A1D0779DCAB95064EC7 /* NIO in Frameworks */ = {isa = PBXBuildFile; productRef = 0BF817CBF4CDFE0CB32E839B /* NIO */; };
+		5F1C6D2DC11CD3B1372902CD /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6A9D0A4288EB61475390EFB0 /* Models.swift */; };
+		74403E2CDFA9A5BA5084EC95 /* NIOSSH in Frameworks */ = {isa = PBXBuildFile; productRef = 6AC84C87F5F5D6B127D28928 /* NIOSSH */; };
+		7E014007D211CCED83539BF9 /* Transport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 93B50560A0C472BDDE4052AB /* Transport.swift */; };
+		838D9EF3991204BADB764A45 /* HerdrWatchTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8745574F4054851D615918CC /* HerdrWatchTests.swift */; };
+		884EDABC0E7BCE629575B5E5 /* Transport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 93B50560A0C472BDDE4052AB /* Transport.swift */; };
+		9F55D80A4DB46D03A249E708 /* CoreAdapter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1345C5410DB212432EB34D4A /* CoreAdapter.swift */; };
+		A5300D5821198A97CF16DB52 /* HerdrWatchApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 38EB4E1FFC796C3B019C3E5E /* HerdrWatchApp.swift */; };
+		A54B8257DDAAB8465F914C17 /* NIO in Frameworks */ = {isa = PBXBuildFile; productRef = DB62F327F4A30B0CF4C917D8 /* NIO */; };
+		C464DE3B6CF6CACF19846BC1 /* Store.swift in Sources */ = {isa = PBXBuildFile; fileRef = B84419E57A5FCB6013F52B7C /* Store.swift */; };
+		C7825AC2F3D232148DB92981 /* Citadel in Frameworks */ = {isa = PBXBuildFile; productRef = 6FE30C1A71BF1C5FB4D15683 /* Citadel */; };
+		CA100937E78BB4DA71DFE826 /* PreviewFixture.swift in Sources */ = {isa = PBXBuildFile; fileRef = 674AE5E99BE2D4BBD3901AB0 /* PreviewFixture.swift */; };
+		E16D542CA39C66E99FBADFEF /* NIOSSH in Frameworks */ = {isa = PBXBuildFile; productRef = 9D7E3A6CD857601562300EE9 /* NIOSSH */; };
+		F8225B0FA51CA22BB49DF625 /* Store.swift in Sources */ = {isa = PBXBuildFile; fileRef = B84419E57A5FCB6013F52B7C /* Store.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		76DF2D0D75C78D93C2EE58C6 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 1B4970B04CF792B367E46871 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 01D284235530FA07601CF30C;
+			remoteInfo = HerdrWatchPreview;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXFileReference section */
+		1345C5410DB212432EB34D4A /* CoreAdapter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoreAdapter.swift; sourceTree = "<group>"; };
+		38EB4E1FFC796C3B019C3E5E /* HerdrWatchApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HerdrWatchApp.swift; sourceTree = "<group>"; };
+		45F19DB364F1A9DFE22CE13D /* Security.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Security.swift; sourceTree = "<group>"; };
+		674AE5E99BE2D4BBD3901AB0 /* PreviewFixture.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreviewFixture.swift; sourceTree = "<group>"; };
+		6A9D0A4288EB61475390EFB0 /* Models.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models.swift; sourceTree = "<group>"; };
+		77BC3670168B0E38FD63F89E /* HerdrWatchTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = HerdrWatchTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		8745574F4054851D615918CC /* HerdrWatchTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HerdrWatchTests.swift; sourceTree = "<group>"; };
+		93B50560A0C472BDDE4052AB /* Transport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Transport.swift; sourceTree = "<group>"; };
+		B4F5C2373C94E706C78AEFFB /* HerdrWatchPreview.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = HerdrWatchPreview.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		B84419E57A5FCB6013F52B7C /* Store.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Store.swift; sourceTree = "<group>"; };
+		D2F4058F56A8D257D4222D4D /* HerdrWatch.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = HerdrWatch.app; sourceTree = BUILT_PRODUCTS_DIR; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		0332E3ADFAD3090F0A66B4D6 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				2BE27FD1075E965200567FE2 /* Citadel in Frameworks */,
+				E16D542CA39C66E99FBADFEF /* NIOSSH in Frameworks */,
+				5B294A1D0779DCAB95064EC7 /* NIO in Frameworks */,
+				2F2CCAE0AF3724E89250FF29 /* Crypto in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		895A1300F25689C633F1C602 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				C7825AC2F3D232148DB92981 /* Citadel in Frameworks */,
+				74403E2CDFA9A5BA5084EC95 /* NIOSSH in Frameworks */,
+				A54B8257DDAAB8465F914C17 /* NIO in Frameworks */,
+				1E3969C9829E9CF17E44C85E /* Crypto in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		1417ABEB081B768AF3FC5B92 /* HerdrWatch */ = {
+			isa = PBXGroup;
+			children = (
+				1345C5410DB212432EB34D4A /* CoreAdapter.swift */,
+				38EB4E1FFC796C3B019C3E5E /* HerdrWatchApp.swift */,
+				6A9D0A4288EB61475390EFB0 /* Models.swift */,
+				674AE5E99BE2D4BBD3901AB0 /* PreviewFixture.swift */,
+				45F19DB364F1A9DFE22CE13D /* Security.swift */,
+				B84419E57A5FCB6013F52B7C /* Store.swift */,
+				93B50560A0C472BDDE4052AB /* Transport.swift */,
+			);
+			path = HerdrWatch;
+			sourceTree = "<group>";
+		};
+		68ED6B32BD459C2FDDBCFBD6 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				D2F4058F56A8D257D4222D4D /* HerdrWatch.app */,
+				B4F5C2373C94E706C78AEFFB /* HerdrWatchPreview.app */,
+				77BC3670168B0E38FD63F89E /* HerdrWatchTests.xctest */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		CB00F427B3ECDA433A102219 = {
+			isa = PBXGroup;
+			children = (
+				1417ABEB081B768AF3FC5B92 /* HerdrWatch */,
+				DE932007B9AA662D42487AC3 /* Tests */,
+				68ED6B32BD459C2FDDBCFBD6 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		DE932007B9AA662D42487AC3 /* Tests */ = {
+			isa = PBXGroup;
+			children = (
+				8745574F4054851D615918CC /* HerdrWatchTests.swift */,
+			);
+			path = Tests;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		01D284235530FA07601CF30C /* HerdrWatchPreview */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = E356E0F4851BBF368F276D72 /* Build configuration list for PBXNativeTarget "HerdrWatchPreview" */;
+			buildPhases = (
+				0EF53B108C48EF00E9783FF6 /* Sources */,
+				895A1300F25689C633F1C602 /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = HerdrWatchPreview;
+			packageProductDependencies = (
+				6FE30C1A71BF1C5FB4D15683 /* Citadel */,
+				6AC84C87F5F5D6B127D28928 /* NIOSSH */,
+				DB62F327F4A30B0CF4C917D8 /* NIO */,
+				D4E6D5AAD1D397271776A1DA /* Crypto */,
+			);
+			productName = HerdrWatchPreview;
+			productReference = B4F5C2373C94E706C78AEFFB /* HerdrWatchPreview.app */;
+			productType = "com.apple.product-type.application";
+		};
+		05A6C580387199E78BB93A65 /* HerdrWatch */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 3D9A494CB5D3C0641D54D11D /* Build configuration list for PBXNativeTarget "HerdrWatch" */;
+			buildPhases = (
+				A1557252D77BE6648F8352F4 /* Sources */,
+				0332E3ADFAD3090F0A66B4D6 /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = HerdrWatch;
+			packageProductDependencies = (
+				9BF0112752F5A2FEC49733FE /* Citadel */,
+				9D7E3A6CD857601562300EE9 /* NIOSSH */,
+				0BF817CBF4CDFE0CB32E839B /* NIO */,
+				141481B5F9CB3224F0A14FC8 /* Crypto */,
+			);
+			productName = HerdrWatch;
+			productReference = D2F4058F56A8D257D4222D4D /* HerdrWatch.app */;
+			productType = "com.apple.product-type.application";
+		};
+		1A1ACF47668943160621D164 /* HerdrWatchTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 49537330AD77E54B04C53784 /* Build configuration list for PBXNativeTarget "HerdrWatchTests" */;
+			buildPhases = (
+				1044DD22F246DCA00B2CA79C /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				265EA32F82124B1CADE3985F /* PBXTargetDependency */,
+			);
+			name = HerdrWatchTests;
+			packageProductDependencies = (
+			);
+			productName = HerdrWatchTests;
+			productReference = 77BC3670168B0E38FD63F89E /* HerdrWatchTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		1B4970B04CF792B367E46871 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = YES;
+				LastUpgradeCheck = 1430;
+				TargetAttributes = {
+					05A6C580387199E78BB93A65 = {
+						DevelopmentTeam = J9RQ24X3A8;
+						ProvisioningStyle = Automatic;
+					};
+				};
+			};
+			buildConfigurationList = 8F9210CE76D216BCBABE8832 /* Build configuration list for PBXProject "HerdrWatch" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				Base,
+				en,
+			);
+			mainGroup = CB00F427B3ECDA433A102219;
+			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				62F932E7015099EE9EFFE2EA /* XCRemoteSwiftPackageReference "Citadel" */,
+				7D074C6552D5E3AC56F4FF94 /* XCRemoteSwiftPackageReference "swift-crypto" */,
+				549598854CA62659C2C5B841 /* XCRemoteSwiftPackageReference "swift-nio" */,
+				A0C085B3BB9EC4BED0D2F95A /* XCRemoteSwiftPackageReference "swift-nio-ssh" */,
+			);
+			preferredProjectObjectVersion = 77;
+			productRefGroup = 68ED6B32BD459C2FDDBCFBD6 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				05A6C580387199E78BB93A65 /* HerdrWatch */,
+				01D284235530FA07601CF30C /* HerdrWatchPreview */,
+				1A1ACF47668943160621D164 /* HerdrWatchTests */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXSourcesBuildPhase section */
+		0EF53B108C48EF00E9783FF6 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				3826AD6DEB44814C45D451D7 /* CoreAdapter.swift in Sources */,
+				01D5362CA674F6B505578EC3 /* HerdrWatchApp.swift in Sources */,
+				5F1C6D2DC11CD3B1372902CD /* Models.swift in Sources */,
+				CA100937E78BB4DA71DFE826 /* PreviewFixture.swift in Sources */,
+				09CD202C7680D00396671DF1 /* Security.swift in Sources */,
+				F8225B0FA51CA22BB49DF625 /* Store.swift in Sources */,
+				7E014007D211CCED83539BF9 /* Transport.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		1044DD22F246DCA00B2CA79C /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				838D9EF3991204BADB764A45 /* HerdrWatchTests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A1557252D77BE6648F8352F4 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				9F55D80A4DB46D03A249E708 /* CoreAdapter.swift in Sources */,
+				A5300D5821198A97CF16DB52 /* HerdrWatchApp.swift in Sources */,
+				004E73FE999188FAD834217A /* Models.swift in Sources */,
+				2843E9CAEFE379951F299A85 /* PreviewFixture.swift in Sources */,
+				5942FB3B386DE9140D96A4C4 /* Security.swift in Sources */,
+				C464DE3B6CF6CACF19846BC1 /* Store.swift in Sources */,
+				884EDABC0E7BCE629575B5E5 /* Transport.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		265EA32F82124B1CADE3985F /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 01D284235530FA07601CF30C /* HerdrWatchPreview */;
+			targetProxy = 76DF2D0D75C78D93C2EE58C6 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		4A72D543F8FB6C1D44B52784 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				"CODE_SIGNING_ALLOWED[sdk=iphoneos*]" = YES;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = J9RQ24X3A8;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Release;
+		};
+		510D54738A4FC541118BEF6F /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				COMBINE_HIDPI_IMAGES = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@loader_path/../Frameworks",
+				);
+				SDKROOT = macosx;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/HerdrWatchPreview.app/Contents/MacOS/HerdrWatchPreview";
+			};
+			name = Debug;
+		};
+		53E209B6380AC2089F14F7B4 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				"CODE_SIGNING_ALLOWED[sdk=iphoneos*]" = YES;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = J9RQ24X3A8;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Debug;
+		};
+		58D6306C408C0ED1E06C9A7B /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				COMBINE_HIDPI_IMAGES = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				SDKROOT = macosx;
+			};
+			name = Release;
+		};
+		80135B17217D4B8741E071DB /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				CODE_SIGNING_ALLOWED = NO;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "Connect to your SSH host on your private network.";
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MACOSX_DEPLOYMENT_TARGET = 15.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				PRODUCT_BUNDLE_IDENTIFIER = dev.herdr.HerdrWatch;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
+		8BEBDAB604BB16943FA0EB3A /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				COMBINE_HIDPI_IMAGES = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				SDKROOT = macosx;
+			};
+			name = Debug;
+		};
+		EC253704F0E7085AEA890978 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				CODE_SIGNING_ALLOWED = NO;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"$(inherited)",
+					"DEBUG=1",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "Connect to your SSH host on your private network.";
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MACOSX_DEPLOYMENT_TARGET = 15.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				PRODUCT_BUNDLE_IDENTIFIER = dev.herdr.HerdrWatch;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		FA36FC6D0A2ADDB0EC3F5D8D /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				COMBINE_HIDPI_IMAGES = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@loader_path/../Frameworks",
+				);
+				SDKROOT = macosx;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/HerdrWatchPreview.app/Contents/MacOS/HerdrWatchPreview";
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		3D9A494CB5D3C0641D54D11D /* Build configuration list for PBXNativeTarget "HerdrWatch" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				53E209B6380AC2089F14F7B4 /* Debug */,
+				4A72D543F8FB6C1D44B52784 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		49537330AD77E54B04C53784 /* Build configuration list for PBXNativeTarget "HerdrWatchTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				510D54738A4FC541118BEF6F /* Debug */,
+				FA36FC6D0A2ADDB0EC3F5D8D /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		8F9210CE76D216BCBABE8832 /* Build configuration list for PBXProject "HerdrWatch" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				EC253704F0E7085AEA890978 /* Debug */,
+				80135B17217D4B8741E071DB /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		E356E0F4851BBF368F276D72 /* Build configuration list for PBXNativeTarget "HerdrWatchPreview" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				8BEBDAB604BB16943FA0EB3A /* Debug */,
+				58D6306C408C0ED1E06C9A7B /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+/* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		549598854CA62659C2C5B841 /* XCRemoteSwiftPackageReference "swift-nio" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/apple/swift-nio.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 2.81.0;
+			};
+		};
+		62F932E7015099EE9EFFE2EA /* XCRemoteSwiftPackageReference "Citadel" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/orlandos-nl/Citadel.git";
+			requirement = {
+				kind = revision;
+				revision = ae8562f895de06ccb86fdb1cbb65fd99c8976e12;
+			};
+		};
+		7D074C6552D5E3AC56F4FF94 /* XCRemoteSwiftPackageReference "swift-crypto" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/apple/swift-crypto.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 3.12.3;
+			};
+		};
+		A0C085B3BB9EC4BED0D2F95A /* XCRemoteSwiftPackageReference "swift-nio-ssh" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/Wellz26/swift-nio-ssh.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 0.3.4;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		0BF817CBF4CDFE0CB32E839B /* NIO */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 549598854CA62659C2C5B841 /* XCRemoteSwiftPackageReference "swift-nio" */;
+			productName = NIO;
+		};
+		141481B5F9CB3224F0A14FC8 /* Crypto */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 7D074C6552D5E3AC56F4FF94 /* XCRemoteSwiftPackageReference "swift-crypto" */;
+			productName = Crypto;
+		};
+		6AC84C87F5F5D6B127D28928 /* NIOSSH */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = A0C085B3BB9EC4BED0D2F95A /* XCRemoteSwiftPackageReference "swift-nio-ssh" */;
+			productName = NIOSSH;
+		};
+		6FE30C1A71BF1C5FB4D15683 /* Citadel */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 62F932E7015099EE9EFFE2EA /* XCRemoteSwiftPackageReference "Citadel" */;
+			productName = Citadel;
+		};
+		9BF0112752F5A2FEC49733FE /* Citadel */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 62F932E7015099EE9EFFE2EA /* XCRemoteSwiftPackageReference "Citadel" */;
+			productName = Citadel;
+		};
+		9D7E3A6CD857601562300EE9 /* NIOSSH */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = A0C085B3BB9EC4BED0D2F95A /* XCRemoteSwiftPackageReference "swift-nio-ssh" */;
+			productName = NIOSSH;
+		};
+		D4E6D5AAD1D397271776A1DA /* Crypto */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 7D074C6552D5E3AC56F4FF94 /* XCRemoteSwiftPackageReference "swift-crypto" */;
+			productName = Crypto;
+		};
+		DB62F327F4A30B0CF4C917D8 /* NIO */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 549598854CA62659C2C5B841 /* XCRemoteSwiftPackageReference "swift-nio" */;
+			productName = NIO;
+		};
+/* End XCSwiftPackageProductDependency section */
+	};
+	rootObject = 1B4970B04CF792B367E46871 /* Project object */;
+}
