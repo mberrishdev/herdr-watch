@@ -64,6 +64,7 @@ enum PromptResponse {
     @Published var observed: Date?
     @Published var connected = false
     @Published var busy = false
+    @Published var connectionProgress = ""
     @Published var stale = true
     @Published var message: String?
     @Published var pendingKey: String?
@@ -82,17 +83,21 @@ enum PromptResponse {
         generation = UUID()
         let attempt = generation
         busy = true; message = nil; pendingKey = nil; stale = true
-        defer { busy = false }
+        defer { busy = false; connectionProgress = "" }
         await transport.disconnect(); connected = false
         var stage = ConnectionStage.ssh
         do {
             try host.validate()
             let pin = try isPreview ? nil : Vault.read("host:\(host.identity)").flatMap { String(data: $0, encoding: .utf8) }
-            try await transport.connect(host: host, trustedKey: pin)
+            connectionProgress = host.usesRelay ? "Opening encrypted connection to your Mac…" : "Connecting to your Mac…"
+            try await transport.connect(host: host, trustedKey: pin) { [weak self] step in
+                self?.connectionProgress = step
+            }
             guard generation == attempt else { await transport.disconnect(); return }
             if !isPreview { UserDefaults.standard.set(try JSONEncoder().encode(host), forKey: "host") }
             connected = true
             stage = .bridge
+            connectionProgress = "Checking Herdr on the Mac…"
             let runtime = String(decoding: try await transport.execute(.runtime), as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)
             if runtime == "hc 0.1.16" {
                 coreProfile = true
@@ -104,6 +109,7 @@ enum PromptResponse {
                 runtimeLabel = "Herdr CLI · upstream 0.9.5 / protocol 22"
             } else { throw WatchError.message("Unsupported Herdr runtime. Supported profiles: herdr-core 0.1.16 or upstream Herdr 0.9.5.") }
             stage = .snapshot
+            connectionProgress = "Loading sessions and agents…"
             try await discover()
         } catch let error as WatchError {
             if case .trust(let key) = error { pendingKey = key }

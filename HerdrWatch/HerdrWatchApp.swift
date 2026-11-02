@@ -9,8 +9,16 @@ import SwiftUI
                 core: ProcessInfo.processInfo.environment["HERDRWATCH_CORE_PREVIEW"] == "1",
                 prompts: ProcessInfo.processInfo.environment["HERDRWATCH_PROMPT_PREVIEW"] == "1"
             ))
-            store.host = Host(address: "sample.tailnet", port: 22, username: "developer")
+            if ProcessInfo.processInfo.environment["HERDRWATCH_RELAY_PREVIEW"] == "1" {
+                store.host = Host(username: "developer", relayEndpoint: "wss://relay.example.workers.dev", relayHostID: "preview-relay-host-identifier")
+            } else {
+                store.host = Host(address: "sample.tailnet", port: 22, username: "developer")
+            }
             store.isPreview = true
+            if ProcessInfo.processInfo.environment["HERDRWATCH_CONNECTING_PREVIEW"] == "1" {
+                store.busy = true
+                store.connectionProgress = "Waiting for the Mac companion…"
+            }
             _store = StateObject(wrappedValue: store)
             return
         }
@@ -20,7 +28,9 @@ import SwiftUI
     var body: some Scene {
         WindowGroup {
             #if DEBUG
-            if ProcessInfo.processInfo.environment["HERDRWATCH_OUTPUT_PREVIEW"] == "1" {
+            if ProcessInfo.processInfo.environment["HERDRWATCH_SETTINGS_PREVIEW"] == "1" {
+                HostSettings().environmentObject(store)
+            } else if ProcessInfo.processInfo.environment["HERDRWATCH_OUTPUT_PREVIEW"] == "1" {
                 OutputPreviewRoot().environmentObject(store)
             } else { Dashboard().environmentObject(store) }
             #else
@@ -148,7 +158,7 @@ struct Dashboard: View {
                                 }
                             }
                         } else if store.connected && !store.busy { emptySnapshot }
-                        else if store.sessions.isEmpty && !store.busy && !store.connected { firstUseCard }
+                        else if store.sessions.isEmpty && !store.busy && !store.connected && !store.host.isConfigured { firstUseCard }
                         Text("Foreground monitoring · agent input available · refreshes every 15 seconds")
                             .font(.caption).foregroundStyle(.tertiary).frame(maxWidth: .infinity).padding(.top, 2)
                     }.padding(.horizontal, 18).padding(.top, 12).padding(.bottom, 28)
@@ -171,7 +181,7 @@ struct Dashboard: View {
             }
             .task(id: phase) {
                 if phase != .active { await store.suspend(); return }
-                if !store.host.address.isEmpty && (store.observed != nil || store.isPreview) { await store.connect() }
+                if store.host.isConfigured && (store.observed != nil || store.isPreview) { await store.connect() }
                 while !Task.isCancelled {
                     do { try await Task.sleep(for: .seconds(15)) } catch { return }
                     await store.refresh(silent: true)
@@ -188,7 +198,7 @@ struct Dashboard: View {
                     .frame(width: 44, height: 44).background((store.connected ? Color.green : Color.secondary).opacity(0.13), in: RoundedRectangle(cornerRadius: 15))
                 VStack(alignment: .leading, spacing: 4) {
                     Text(store.connected ? "Connected" : "Your Herdr host").font(.headline)
-                    Text(store.host.address.isEmpty ? "Add one SSH host to get started" : "\(store.host.username)@\(store.host.address) · SSH \(store.host.port)")
+                    Text(store.host.usesRelay ? "\(store.host.username) · Encrypted relay" : store.host.address.isEmpty ? "Add one SSH host to get started" : "\(store.host.username)@\(store.host.address) · SSH \(store.host.port)")
                         .font(.subheadline).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle)
                 }
                 Spacer(minLength: 0)
@@ -202,13 +212,16 @@ struct Dashboard: View {
                     Text(store.runtimeLabel.replacingOccurrences(of: "Herdr desktop · ", with: "").replacingOccurrences(of: "Herdr CLI · ", with: ""))
                 }.font(.caption).foregroundStyle(.secondary)
             }
-            if store.busy { ProgressView(store.connected ? "Refreshing workspace…" : "Connecting securely…").font(.subheadline).tint(.accentColor) }
+            if store.busy {
+                ProgressView(store.connectionProgress.isEmpty ? (store.connected ? "Refreshing workspace…" : "Connecting securely…") : store.connectionProgress)
+                    .font(.subheadline).tint(.accentColor)
+            }
             else {
                 Button {
-                    if store.host.address.isEmpty { settings = true }
+                    if !store.host.isConfigured { settings = true }
                     else { Task { await store.connectOrRefresh() } }
                 } label: {
-                    Label(store.connected ? "Refresh workspace" : store.host.address.isEmpty ? "Set up connection" : "Connect securely",
+                    Label(store.connected ? "Refresh workspace" : store.host.isConfigured ? "Connect securely" : "Set up connection",
                           systemImage: store.connected ? "arrow.clockwise" : "lock.shield")
                         .font(.headline).frame(maxWidth: .infinity).padding(.vertical, 12)
                         .background(LinearGradient(colors: [Color.accentColor, Color.accentColor.opacity(0.82)], startPoint: .topLeading, endPoint: .bottomTrailing), in: Capsule())
@@ -316,7 +329,11 @@ struct HostSettings: View {
     @State private var host = Host()
     @State private var port = "22"
     @State private var password = ""
+    @State private var pairingCode = ""
+    @State private var scannedPairingCode: String?
+    @State private var scannerPresented = false
     @State private var hasSavedPassword: Bool?
+    private var pairingCodeIsValid: Bool { (try? RelayPairing.decode(pairingCode)) != nil }
     var body: some View {
         NavigationStack {
             ZStack {
@@ -325,7 +342,7 @@ struct HostSettings: View {
                     VStack(alignment: .leading, spacing: 16) {
                         VStack(alignment: .leading, spacing: 7) {
                             Text("Connect your host").font(.largeTitle.weight(.bold))
-                            Text("A few details to securely find your Herdr workspace.").font(.subheadline).foregroundStyle(.secondary)
+                            Text("Connect through HerdrWatch’s encrypted relay.").font(.subheadline).foregroundStyle(.secondary)
                         }.padding(.horizontal, 3).padding(.top, 10)
                         HStack(spacing: 0) {
                             SetupStep(number: "1", title: "Host", active: true)
@@ -334,18 +351,70 @@ struct HostSettings: View {
                             Rectangle().fill(Color.primary.opacity(0.12)).frame(height: 1).frame(maxWidth: 28)
                             SetupStep(number: "3", title: "Verify", active: false)
                         }.padding(.vertical, 2)
-                        VStack(alignment: .leading, spacing: 13) {
-                            cardHeading("Host details", subtitle: "The Mac or server where Herdr is running.", symbol: "network")
-                            VStack(spacing: 9) {
-                                LabeledInput(title: "HOSTNAME OR TAILSCALE IP", placeholder: "mac-mini.example.ts.net", text: $host.address)
+                        Text("Verify starts after you connect and review the SSH host fingerprint.")
+                            .font(.caption).foregroundStyle(.secondary).padding(.horizontal, 3)
+                        VStack(alignment: .leading, spacing: 12) {
+                            cardHeading("Encrypted relay", subtitle: "Scan the QR from herdrwatch-host, or paste its pairing code. SSH stays encrypted between this iPhone and your computer.", symbol: "lock.icloud")
+                            if pairingCodeIsValid || (host.usesRelay && pairingCode.isEmpty) {
+                                let scanned = pairingCodeIsValid && scannedPairingCode == pairingCode
+                                Label(pairingCodeIsValid ? (scanned ? "QR scanned · host pairing ready" : "Pairing code ready") : "Host already paired on this iPhone",
+                                      systemImage: "checkmark.seal.fill")
+                                    .font(.subheadline.weight(.semibold)).foregroundStyle(.green)
+                                Text(pairingCodeIsValid
+                                     ? "Next: enter your SSH username and password below, then tap Save connection. After this screen closes, tap Connect on the dashboard."
+                                     : "Enter or update your SSH username and password below, then tap Save connection. Tap Connect on the dashboard to load your sessions.")
+                                    .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                                #if os(iOS)
+                                Button(host.usesRelay ? "Replace paired host" : "Scan a different QR code") { scannerPresented = true }
+                                    .font(.caption.weight(.medium)).buttonStyle(.borderless)
+                                #endif
+                                if !pairingCode.isEmpty {
+                                    Button("Clear pairing code", role: .destructive) { pairingCode = "" }
+                                        .font(.caption).buttonStyle(.borderless)
+                                }
+                            } else {
+                                #if os(iOS)
+                                Button { scannerPresented = true } label: {
+                                    Label("Scan QR code", systemImage: "qrcode.viewfinder")
+                                        .font(.subheadline.weight(.semibold)).frame(maxWidth: .infinity).padding(.vertical, 11)
+                                }.buttonStyle(.bordered).tint(.accentColor)
+                                #else
+                                Label("Scan the terminal QR with HerdrWatch on your iPhone", systemImage: "qrcode.viewfinder")
+                                    .font(.caption).foregroundStyle(.secondary)
+                                #endif
+                                TextField(host.usesRelay ? "Relay paired · paste a new code to replace" : "Paste pairing code", text: $pairingCode, axis: .vertical)
+                                    .font(.caption.monospaced()).lineLimit(2...5)
+                                    #if os(iOS)
+                                    .textInputAutocapitalization(.never).autocorrectionDisabled()
+                                    #endif
+                                    .padding(13).background(Color.primary.opacity(0.045), in: RoundedRectangle(cornerRadius: 13))
+                                Text("After pairing, the host companion must stay running. No Cloudflare One or VPN app is needed.")
+                                    .font(.caption).foregroundStyle(.secondary)
+                            }
+                            DisclosureGroup("Direct SSH (private network only)") {
+                                LabeledInput(title: "HOSTNAME OR PRIVATE IP", placeholder: "192.168.1.20", text: $host.address)
                                     #if os(iOS)
                                     .textInputAutocapitalization(.never).autocorrectionDisabled().keyboardType(.URL)
                                     #endif
-                                HStack(spacing: 9) {
-                                    LabeledInput(title: "SSH USERNAME", placeholder: "developer", text: $host.username)
-                                        #if os(iOS)
-                                        .textInputAutocapitalization(.never).autocorrectionDisabled()
-                                        #endif
+                                if host.usesRelay {
+                                    Button("Switch to direct SSH", role: .destructive) {
+                                        host.relayEndpoint = nil
+                                        host.relayHostID = nil
+                                    }.font(.caption)
+                                }
+                            }.font(.subheadline.weight(.medium))
+                        }.padding(17).glassPanel(cornerRadius: 24)
+                        VStack(alignment: .leading, spacing: 13) {
+                            cardHeading("SSH login", subtitle: "Your Mac account and SSH password. Enable Remote Login on the Mac.", symbol: "network")
+                            VStack(spacing: 9) {
+                                LabeledInput(title: "SSH USERNAME", placeholder: "developer", text: $host.username)
+                                    #if os(iOS)
+                                    .textInputAutocapitalization(.never).autocorrectionDisabled()
+                                    #endif
+                                if host.usesRelay || !pairingCode.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                                    Text("SSH port 22 · managed by the host companion").font(.caption).foregroundStyle(.secondary).frame(maxWidth: .infinity, alignment: .leading)
+                                } else {
+                                    HStack {
                                     VStack(alignment: .leading, spacing: 6) {
                                         Text("PORT").font(.caption2.weight(.semibold)).tracking(0.8).foregroundStyle(.secondary)
                                         TextField("22", text: $port).font(.body.monospacedDigit())
@@ -354,9 +423,11 @@ struct HostSettings: View {
                                             .keyboardType(.numberPad)
                                             #endif
                                     }.frame(width: 86)
+                                    Spacer()
+                                    }
                                 }
                             }
-                            Text("Herdr needs to be installed and running for this SSH account. Use a private network such as Tailscale.")
+                            Text("Herdr needs to be installed and running for this SSH account.")
                                 .font(.caption).foregroundStyle(.secondary)
                         }.padding(17).glassPanel(cornerRadius: 24)
                         VStack(alignment: .leading, spacing: 13) {
@@ -396,6 +467,14 @@ struct HostSettings: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Close") { dismiss() } }
             }
+            #if os(iOS)
+            .sheet(isPresented: $scannerPresented) {
+                PairingScannerSheet {
+                    pairingCode = $0
+                    scannedPairingCode = $0
+                }
+            }
+            #endif
             .safeAreaInset(edge: .bottom, spacing: 0) {
                 Button(action: saveHost) {
                     Label("Save connection", systemImage: "lock.shield.fill").font(.headline).frame(maxWidth: .infinity).padding(.vertical, 13)
@@ -406,6 +485,9 @@ struct HostSettings: View {
             }
             .onAppear {
                 host = store.host; port = String(host.port)
+            }
+            .onChange(of: pairingCode) { _, value in
+                if value != scannedPairingCode { scannedPairingCode = nil }
             }
             .task(id: host.passwordAccount) { hasSavedPassword = try? Vault.contains(host.passwordAccount) }
         }
@@ -427,8 +509,20 @@ struct HostSettings: View {
         guard let number = Int(port) else { store.message = "Enter a numeric port."; return }
         host.port = number
         do {
+            let previousRelayAccount = store.host.usesRelay ? store.host.relaySecretAccount : nil
+            var incomingRelaySecret: String?
+            if !pairingCode.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                let pairing = try RelayPairing.decode(pairingCode)
+                host.address = ""
+                host.relayEndpoint = pairing.endpoint
+                host.relayHostID = pairing.host_id
+                incomingRelaySecret = pairing.secret
+            }
             try host.validate()
+            if let incomingRelaySecret { try Vault.save(Data(incomingRelaySecret.utf8), account: host.relaySecretAccount) }
+            if let previousRelayAccount, previousRelayAccount != host.relaySecretAccount { try Vault.delete(previousRelayAccount) }
             if !password.isEmpty { try Vault.save(Data(password.utf8), account: host.passwordAccount) }
+            pairingCode = ""
             password = ""
             Task { await store.suspend(); store.clearCache(); store.pendingKey = nil; store.host = host; UserDefaults.standard.set(try? JSONEncoder().encode(host), forKey: "host"); dismiss() }
         } catch { store.message = error.localizedDescription }

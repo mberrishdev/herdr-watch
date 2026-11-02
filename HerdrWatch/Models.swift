@@ -4,10 +4,44 @@ struct Host: Codable, Equatable {
     var address = ""
     var port = 22
     var username = ""
+    var relayEndpoint: String?
+    var relayHostID: String?
     var passwordAccount: String { "password:\(identity):\(username)" }
-    var identity: String { "\(address.lowercased()):\(port)" }
+    var relaySecretAccount: String { "relay:\(identity)" }
+    var usesRelay: Bool { relayEndpoint != nil && relayHostID != nil }
+    var isConfigured: Bool { usesRelay || !address.isEmpty }
+    var identity: String { usesRelay ? "relay:\(relayHostID ?? "")" : "\(address.lowercased()):\(port)" }
     func validate() throws {
-        guard !address.isEmpty, address.count <= 253, !address.contains("\0"), !username.contains("\0"), username.count <= 128, !username.contains(where: { $0.isWhitespace }), !address.contains(where: { $0.isWhitespace || $0.isNewline }), !username.isEmpty, (1...65535).contains(port) else { throw WatchError.message("Enter a host, SSH username and port 1–65535.") }
+        let addressValid = usesRelay || (!address.isEmpty && address.count <= 253 && !address.contains("\0") && !address.contains(where: { $0.isWhitespace || $0.isNewline }))
+        guard addressValid, !username.contains("\0"), username.count <= 128, !username.contains(where: { $0.isWhitespace }), !username.isEmpty, (1...65535).contains(port) else { throw WatchError.message("Enter a host, SSH username and port 1–65535.") }
+        if usesRelay {
+            guard let relayEndpoint, relayEndpoint.count <= 512,
+                  let url = URL(string: relayEndpoint), url.scheme == "wss", url.host != nil,
+                  url.user == nil, url.password == nil, url.query == nil, url.fragment == nil,
+                  let relayHostID, relayHostID.range(of: "^[A-Za-z0-9_-]{16,64}$", options: .regularExpression) != nil else {
+                throw WatchError.message("The relay pairing code is invalid.")
+            }
+        }
+    }
+}
+
+struct RelayPairing: Decodable {
+    let version: Int
+    let endpoint: String
+    let host_id: String
+    let secret: String
+    static func decode(_ value: String) throws -> RelayPairing {
+        let normalized = value.trimmingCharacters(in: .whitespacesAndNewlines).replacingOccurrences(of: "-", with: "+").replacingOccurrences(of: "_", with: "/")
+        guard let data = Data(base64Encoded: normalized + String(repeating: "=", count: (4 - normalized.count % 4) % 4)) else { throw WatchError.message("That pairing code is not valid. Copy the full code from the host companion.") }
+        let pairing = try JSONDecoder().decode(RelayPairing.self, from: data)
+        guard pairing.version == 1, pairing.endpoint.count <= 512,
+              let endpoint = URL(string: pairing.endpoint), endpoint.scheme == "wss", endpoint.host != nil,
+              endpoint.user == nil, endpoint.password == nil, endpoint.query == nil, endpoint.fragment == nil,
+              pairing.host_id.range(of: "^[A-Za-z0-9_-]{16,64}$", options: .regularExpression) != nil,
+              Data(base64Encoded: pairing.secret.replacingOccurrences(of: "-", with: "+").replacingOccurrences(of: "_", with: "/") + String(repeating: "=", count: (4 - pairing.secret.count % 4) % 4))?.count == 32 else {
+            throw WatchError.message("That pairing code is incomplete or unsupported.")
+        }
+        return pairing
     }
 }
 enum WatchError: LocalizedError {

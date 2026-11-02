@@ -23,7 +23,7 @@ settings:
     GENERATE_INFOPLIST_FILE: YES
     CODE_SIGNING_ALLOWED: NO
     PRODUCT_BUNDLE_IDENTIFIER: dev.herdr.HerdrWatch
-    INFOPLIST_KEY_NSLocalNetworkUsageDescription: Connect to your SSH host on your private network.
+    INFOPLIST_KEY_NSLocalNetworkUsageDescription: Connect securely to your paired HerdrWatch host.
 targets:
   HerdrWatch:
     type: application
@@ -36,6 +36,7 @@ targets:
         'CODE_SIGNING_ALLOWED[sdk=iphoneos*]': YES
         TARGETED_DEVICE_FAMILY: '1'
         INFOPLIST_KEY_UILaunchScreen_Generation: YES
+        INFOPLIST_KEY_NSCameraUsageDescription: Scan the QR code printed by your HerdrWatch host companion to pair this iPhone securely.
     dependencies: &deps
       - package: Citadel
       - package: NIOSSH

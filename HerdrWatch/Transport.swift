@@ -5,13 +5,14 @@ import NIOSSH
 import Darwin
 
 @MainActor protocol SSHTransport: AnyObject {
-    func connect(host: Host, trustedKey: String?) async throws
+    func connect(host: Host, trustedKey: String?, progress: @escaping @MainActor (String) -> Void) async throws
     func execute(_ operation: ReadOperation) async throws -> Data
     func disconnect() async
 }
 @MainActor final class CitadelTransport: SSHTransport {
     private var client: SSHClient?
     private var generation = UUID()
+    private let relayBridge = RelayBridge()
     private let passwordProvider: (Host) throws -> String
     init(passwordProvider: ((Host) throws -> String)? = nil) {
         self.passwordProvider = passwordProvider ?? { host in
@@ -21,14 +22,32 @@ import Darwin
             return password
         }
     }
-    func connect(host: Host, trustedKey: String?) async throws {
+    func connect(host: Host, trustedKey: String?, progress: @escaping @MainActor (String) -> Void) async throws {
         try host.validate()
         let authentication = SSHAuthenticationMethod.passwordBased(username: host.username, password: try passwordProvider(host))
         let attempt = generation
-        let connection = try await SSHClient.connect(host: host.address, port: host.port,
+        var sshHost = host.address
+        var sshPort = host.port
+        if host.usesRelay {
+            guard let endpoint = host.relayEndpoint, let hostID = host.relayHostID,
+                  let secretData = try Vault.read(host.relaySecretAccount), let secret = String(data: secretData, encoding: .utf8) else {
+                throw WatchError.message("Relay pairing is missing. Paste the pairing code again in Host settings.")
+            }
+            progress("Waiting for the Mac companion…")
+            sshPort = Int(try await relayBridge.open(endpoint: endpoint, hostID: hostID, secret: secret))
+            sshHost = "127.0.0.1"
+        }
+        let connection: SSHClient
+        do {
+            progress("Starting SSH handshake with your Mac…")
+            connection = try await SSHClient.connect(host: sshHost, port: sshPort,
             authenticationMethod: authentication,
             hostKeyValidator: .custom(PinValidator(expected: trustedKey)), reconnect: .never,
             connectTimeout: .seconds(12))
+        } catch {
+            relayBridge.close()
+            throw error
+        }
         guard attempt == generation else { try? await connection.close(); throw CancellationError() }
         client = connection
     }
@@ -91,7 +110,7 @@ import Darwin
         if timedOut { throw WatchError.message("Herdr command timed out after 15 seconds. SSH login succeeded; check the host's non-interactive shell and Herdr command.") }
         return result
     }
-    func disconnect() async { generation = UUID(); let old = client; client = nil; try? await old?.close() }
+    func disconnect() async { generation = UUID(); let old = client; client = nil; relayBridge.close(); try? await old?.close() }
 }
 
 enum ConnectionStage: String {
@@ -102,6 +121,9 @@ enum ConnectionStage: String {
 }
 enum ConnectionFailure {
     static func message(_ error: Error, stage: ConnectionStage) -> String {
+        if let hostError = error as? URLError, hostError.code == .badServerResponse || hostError.code == .cannotConnectToHost || hostError.code == .notConnectedToInternet || hostError.code == .networkConnectionLost {
+            return "Could not reach the shared relay. Check the internet connection, relay URL, and that herdrwatch-host relay run is active."
+        }
         if let failure = error as? SSHClientError {
             switch failure {
             case .unsupportedPasswordAuthentication:

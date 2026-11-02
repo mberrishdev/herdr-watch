@@ -2,6 +2,10 @@
 .build*/
 DerivedData/
 .swiftpm/
+host/dist/
+relay/node_modules/
+relay/.wrangler/
+relay/.dev.vars
 
 # Local research and generated artifacts
 research/

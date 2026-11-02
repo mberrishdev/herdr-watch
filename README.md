@@ -1,6 +1,58 @@
 # HerdrWatch
 
-Small SwiftUI iPhone MVP for one existing SSH host. It discovers Herdr sessions and agents, reads live terminal screens, and provides an inline field to send an explicit instruction to a detected agent. Requires iOS 17+, ordinary SSH password authentication, and either **Herdr desktop / herdr-core 0.1.16 (generation 1)** or **upstream Herdr 0.9.5 (protocol 22)** on the remote SSH PATH. No server component or cloud backend is added.
+## Shared relay (no VPN app on iPhone)
+
+HerdrWatch can carry its existing SSH connection over the HerdrWatch shared
+Cloudflare Worker relay. The relay forwards binary SSH frames; the SSH stream
+is encrypted and host-key pinned end to end by Citadel. The relay cannot read
+SSH passwords, Herdr session data, or agent output. It can observe connection
+metadata (relay ID, timing, and traffic volume). The Mac companion listens only
+on its own loopback SSH port and opens an outbound WSS connection, so no
+inbound router port or VPN app is needed.
+
+### One-time maintainer deployment
+
+Deploy the shared Worker once under the HerdrWatch service account. This is not
+per-user Cloudflare setup:
+
+```sh
+cd relay
+npm ci
+npm run deploy
+```
+
+Cloudflare will print the Worker URL, for example
+`https://herdrwatch-relay.<account>.workers.dev`. The host CLI expects the
+WebSocket form, `wss://herdrwatch-relay.<account>.workers.dev`.
+
+### Pair a computer and iPhone
+
+Build `host/` for macOS or Windows, then on the computer run:
+
+```sh
+herdrwatch-host relay init --endpoint wss://herdrwatch-relay.<account>.workers.dev
+```
+
+In HerdrWatch, open Settings → Connection → Encrypted relay and scan the QR
+shown in the terminal (or paste the text pairing code). Enter the SSH username
+and password, then save. On the Mac,
+enable Remote Login and start the local companion:
+
+```sh
+herdrwatch-host relay run
+```
+
+Keep it running while connected. The companion and app can be anywhere with
+internet access; neither needs Cloudflare One/WARP or a Cloudflare login. The
+phone still verifies the SSH host fingerprint on first connection. Treat the
+pairing code as a password: anyone holding it can attempt SSH authentication
+to that paired computer. Re-pair the host if the code is exposed.
+
+Small SwiftUI iPhone MVP for one existing SSH host. It discovers Herdr sessions and agents, reads live terminal screens, and provides an inline field to send an explicit instruction to a detected agent. Requires iOS 17+, ordinary SSH password authentication, and either **Herdr desktop / herdr-core 0.1.16 (generation 1)** or **upstream Herdr 0.9.5 (protocol 22)** on the remote SSH PATH. The shared relay is an optional Cloudflare Worker deployed once by the HerdrWatch publisher; SSH remains encrypted end to end.
+
+## Cross-platform host companion (early development)
+
+The Go CLI in [host/](host/README.md) targets macOS and Windows. Its shared-relay mode needs no Cloudflare login or Cloudflare One app on the phone. Its older Cloudflare Tunnel mode remains available for users who already use Cloudflare One/WARP. HerdrWatch remains an iPhone app; the companion is the cross-platform desktop component.
 
 ## Build
 
@@ -14,8 +66,8 @@ xcodebuild -project HerdrWatch.xcodeproj -scheme HerdrWatch -sdk iphonesimulator
 
 ## Connect
 
-1. Open Host settings and enter the SSH hostname/IP, port and username. The app doesn't configure Tailscale; establish your private-network route separately.
-2. Enter your SSH password. Passwords are saved only in device-only Keychain, scoped to host, port and username. The SSH server must allow password authentication; keyboard-interactive/MFA login is not implemented. SSH credentials grant your host account's authority.
+1. Install the host companion and follow [the shared relay setup](#shared-relay-no-vpn-app-on-iphone). Paste the generated pairing code into Host settings. This connects through the publisher's shared relay and does not require a phone VPN.
+2. Enter your SSH username and password. Passwords are saved only in device-only Keychain, scoped to host and username. The SSH server must allow password authentication; keyboard-interactive/MFA login is not implemented. SSH credentials grant your host account's authority.
 3. Save, connect, and compare the displayed host-key SHA-256 fingerprint using an independent trusted channel before trusting it. For example, inspect the relevant host public key with `ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub -E sha256` on the host.
 4. Choose a running session. Refresh manually or leave the app active for 15-second foreground polling. Tap an agent row to open its real terminal screen.
 

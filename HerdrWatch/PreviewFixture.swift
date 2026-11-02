@@ -6,7 +6,7 @@ final class PreviewTransport: SSHTransport {
     let core: Bool
     let prompts: Bool
     init(core: Bool = false, prompts: Bool = false) { self.core = core; self.prompts = prompts }
-    func connect(host: Host, trustedKey: String?) async throws {}
+    func connect(host: Host, trustedKey: String?, progress: @escaping @MainActor (String) -> Void) async throws {}
     func disconnect() async {}
     func execute(_ operation: ReadOperation) async throws -> Data {
         switch operation {
