@@ -11,12 +11,13 @@ permissions:
 jobs:
   macos:
     name: macOS universal DMG
-    runs-on: macos-15
+    runs-on: xcode-27
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with:
           go-version-file: services/host/go.mod
+          cache-dependency-path: services/host/go.sum
       - name: Archive the native Mac host app
         run: >-
           xcodebuild -project HerdrWatch.xcodeproj -scheme HerdrWatchHost
@@ -51,6 +52,7 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: services/host/go.mod
+          cache-dependency-path: services/host/go.sum
       - uses: dtolnay/rust-toolchain@stable
       - name: Install desktop dependencies
         working-directory: apps/desktop

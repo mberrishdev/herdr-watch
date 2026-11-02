@@ -21,6 +21,7 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: services/host/go.mod
+          cache-dependency-path: services/host/go.sum
       - uses: dtolnay/rust-toolchain@stable
       - name: Install frontend dependencies
         working-directory: apps/desktop
