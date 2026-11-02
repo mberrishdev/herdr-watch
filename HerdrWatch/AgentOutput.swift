@@ -9,6 +9,20 @@ struct OutputTarget {
     let agent: Agent
     let scope: OutputScope
 }
+enum PromptDeliveryNotice: Equatable {
+    case submitted
+    case uncertain
+    var text: String {
+        switch self {
+        case .submitted: return "Instruction submitted. Agent progress is reported separately."
+        case .uncertain: return "Delivery is uncertain. Inspect the agent before sending again."
+        }
+    }
+}
+private enum AgentOutputSheet: String, Identifiable {
+    case details
+    var id: String { rawValue }
+}
 struct TerminalOutput {
     let text: String
     let truncated: Bool
@@ -102,9 +116,9 @@ private struct OutputBlock: Identifiable {
     enum Kind {
         case heading(String)
         case paragraph(String)
-        case prompt(String)
+        case quote(String)
         case bullets([String])
-        case code(String)
+        case code(String?, String)
     }
     let id: Int
     let kind: Kind
@@ -122,6 +136,7 @@ private enum ReadableOutputParser {
         var paragraph: [String] = []
         var bullets: [String] = []
         var code: [String] = []
+        var codeLanguage: String?
         var inCode = false
         func flushParagraph() {
             guard !paragraph.isEmpty else { return }
@@ -135,15 +150,20 @@ private enum ReadableOutputParser {
         }
         func flushCode() {
             guard !code.isEmpty else { return }
-            result.append(OutputBlock(id: result.count, kind: .code(code.joined(separator: "\n"))))
+            result.append(OutputBlock(id: result.count, kind: .code(codeLanguage, code.joined(separator: "\n"))))
             code.removeAll(keepingCapacity: true)
+            codeLanguage = nil
         }
         for raw in lines {
             let line = raw.trimmingCharacters(in: .whitespaces)
             if line.hasPrefix("```") {
                 flushParagraph(); flushBullets()
-                if inCode { flushCode() }
-                inCode.toggle()
+                if inCode { flushCode(); inCode = false }
+                else {
+                    let language = String(line.dropFirst(3)).trimmingCharacters(in: .whitespaces)
+                    codeLanguage = language.isEmpty ? nil : language
+                    inCode = true
+                }
                 continue
             }
             if inCode { code.append(raw); continue }
@@ -156,7 +176,10 @@ private enum ReadableOutputParser {
                 flushParagraph(); bullets.append(item)
             } else if line.hasPrefix("› ") {
                 flushParagraph(); flushBullets()
-                result.append(OutputBlock(id: result.count, kind: .prompt(String(line.dropFirst(2)))))
+                result.append(OutputBlock(id: result.count, kind: .quote(String(line.dropFirst(2)))))
+            } else if line.hasPrefix("> ") {
+                flushParagraph(); flushBullets()
+                result.append(OutputBlock(id: result.count, kind: .quote(String(line.dropFirst(2)))) )
             } else {
                 flushBullets(); paragraph.append(raw)
             }
@@ -172,6 +195,9 @@ private enum ReadableOutputParser {
         for marker in ["• ", "◦ ", "- ", "* "] where line.hasPrefix(marker) {
             return String(line.dropFirst(marker.count))
         }
+        if let range = line.range(of: "^[0-9]{1,3}[.)]\\s+", options: .regularExpression) {
+            return String(line[range.upperBound...])
+        }
         return nil
     }
 }
@@ -182,47 +208,57 @@ private struct ReadableOutputView: View {
     private var blocks: [OutputBlock] { ReadableOutputParser.blocks(text) }
     var body: some View {
         LazyVStack(alignment: .leading, spacing: 14) {
-            HStack(spacing: 7) {
-                Image(systemName: "text.alignleft").foregroundStyle(Color.accentColor)
-                Text("LATEST OUTPUT").tracking(1.1).foregroundStyle(.secondary)
-            }.font(.caption.weight(.semibold)).padding(.bottom, 2)
             if blocks.isEmpty {
                 Text("The terminal screen is empty.").font(.body).foregroundStyle(.secondary)
             }
             ForEach(blocks) { block in
                 switch block.kind {
                 case .heading(let value):
-                    Text(verbatim: value).font(.system(size: fontSize + 2, weight: .semibold)).foregroundStyle(.primary)
+                    Text(inlineMarkdown(value)).font(.system(size: fontSize + 2, weight: .semibold)).foregroundStyle(.primary)
                         .fixedSize(horizontal: false, vertical: true)
                 case .paragraph(let value):
-                    Text(verbatim: value).font(.system(size: fontSize)).lineSpacing(5).textSelection(.enabled)
+                    Text(inlineMarkdown(value)).font(.system(size: fontSize)).lineSpacing(5).textSelection(.enabled)
                         .fixedSize(horizontal: false, vertical: true)
-                case .prompt(let value):
-                    VStack(alignment: .leading, spacing: 8) {
-                        Label("Prompt", systemImage: "quote.bubble.fill").font(.caption.weight(.semibold)).foregroundStyle(Color.accentColor)
-                        Text(verbatim: value).font(.system(size: fontSize, weight: .medium)).lineSpacing(4).textSelection(.enabled)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }.padding(14).frame(maxWidth: .infinity, alignment: .leading)
-                        .background(Color.accentColor.opacity(0.075), in: RoundedRectangle(cornerRadius: 16))
+                case .quote(let value):
+                    HStack(alignment: .top, spacing: 10) {
+                        Capsule().fill(Color.accentColor.opacity(0.55)).frame(width: 3)
+                        Text(inlineMarkdown(value)).font(.system(size: fontSize)).foregroundStyle(.secondary).lineSpacing(4)
+                            .textSelection(.enabled).fixedSize(horizontal: false, vertical: true)
+                    }.fixedSize(horizontal: false, vertical: true).padding(.vertical, 2)
                 case .bullets(let values):
                     VStack(alignment: .leading, spacing: 9) {
                         ForEach(Array(values.enumerated()), id: \.offset) { _, value in
                             HStack(alignment: .firstTextBaseline, spacing: 10) {
                                 Circle().fill(Color.accentColor).frame(width: 6, height: 6).padding(.top, 2)
-                                Text(verbatim: value).font(.system(size: fontSize)).lineSpacing(4).textSelection(.enabled)
+                                Text(inlineMarkdown(value)).font(.system(size: fontSize)).lineSpacing(4).textSelection(.enabled)
                                     .fixedSize(horizontal: false, vertical: true)
                             }
                         }
                     }.padding(.leading, 2)
-                case .code(let value):
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        Text(verbatim: value).font(.system(size: fontSize * 0.92, design: .monospaced)).textSelection(.enabled)
-                            .padding(13)
-                    }.background(Color.primary.opacity(0.055), in: RoundedRectangle(cornerRadius: 13))
+                case .code(let language, let value):
+                    VStack(alignment: .leading, spacing: 0) {
+                        if let language, !language.isEmpty {
+                            Text(language.lowercased()).font(.caption2.weight(.semibold)).tracking(0.2)
+                                .foregroundStyle(.secondary).padding(.horizontal, 13).padding(.top, 11)
+                        }
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            Text(verbatim: value).font(.system(size: fontSize * 0.9, design: .monospaced))
+                                .textSelection(.enabled).fixedSize(horizontal: true, vertical: false)
+                                .padding(13)
+                        }
+                    }.frame(maxWidth: .infinity, alignment: .leading)
+                        .background(Color.primary.opacity(0.045), in: RoundedRectangle(cornerRadius: 13))
                 }
             }
         }.frame(maxWidth: .infinity, alignment: .leading)
     }
+}
+
+/// Render inline emphasis and code while keeping terminal-provided links inert.
+private func inlineMarkdown(_ source: String) -> AttributedString {
+    var value = (try? AttributedString(markdown: source, options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace))) ?? AttributedString(source)
+    for run in value.runs where run.link != nil { value[run.range].link = nil }
+    return value
 }
 
 struct AgentOutputView: View {
@@ -236,7 +272,7 @@ struct AgentOutputView: View {
     @State private var output: TerminalOutput?
     @State private var loading = false
     @State private var error: String?
-    @State private var showDetails = false
+    @State private var activeSheet: AgentOutputSheet?
     init(target: OutputTarget) { _target = State(initialValue: target) }
     private var currentStatus: String { store.snapshot?.agents.first(where: { $0.id == target.agent.id })?.agent_status ?? "unknown" }
     private var readableText: String {
@@ -280,29 +316,43 @@ struct AgentOutputView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            header.padding(16)
+            header.padding(.horizontal, 16).padding(.vertical, 11)
             Divider()
+            sourceRow.padding(.horizontal, 18).padding(.vertical, 9)
             if output != nil {
                 ScrollView(readableMode || wrapLines ? .vertical : [.horizontal, .vertical]) {
-                    Group {
+                    VStack(alignment: .leading, spacing: 14) {
+                        if let output, output.truncated || output.partial {
+                            Label(output.truncated ? "Showing the newest part of this output" : "The host reports an incomplete screen", systemImage: "exclamationmark.triangle")
+                                .font(.caption).foregroundStyle(.orange)
+                        }
+                        if let error {
+                            Label(error, systemImage: "exclamationmark.circle")
+                                .font(.caption).foregroundStyle(.orange).fixedSize(horizontal: false, vertical: true)
+                                .padding(10).frame(maxWidth: .infinity, alignment: .leading)
+                                .background(.orange.opacity(0.08), in: RoundedRectangle(cornerRadius: 12))
+                        }
                         if readableMode {
                             ReadableOutputView(text: output?.text ?? "", fontSize: baseTextSize * displayScale)
-                                .padding(18)
+                                .padding(.vertical, 8)
                         } else {
                             Text(formattedOutput).lineSpacing(5).textSelection(.enabled)
                                 .fixedSize(horizontal: !wrapLines, vertical: true)
                                 .frame(maxWidth: wrapLines ? .infinity : nil, alignment: .leading)
-                                .padding(17)
+                                .padding(.vertical, 8)
                         }
-                    }
+                    }.frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal, 18).padding(.bottom, 18)
                 }.frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-                    .glassPanel(cornerRadius: 22)
             } else {
-                ContentUnavailableView(loading ? "Reading terminal…" : "No screen yet", systemImage: "terminal", description: Text("The agent's current terminal screen will appear here."))
+                ContentUnavailableView(loading ? "Reading session…" : "No output yet", systemImage: "text.alignleft", description: Text(error ?? "Herdr's latest terminal output will appear here."))
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
-        .navigationTitle("Session")
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            AgentPromptComposer(target: target).environmentObject(store)
+        }
+        .navigationTitle(target.agent.title)
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
         #endif
@@ -320,9 +370,13 @@ struct AgentOutputView: View {
             } label: { Image(systemName: store.connected ? "arrow.clockwise" : "wifi.exclamationmark") }
                 .accessibilityLabel(store.connected ? "Refresh terminal" : "Reconnect")
                 .disabled(loading || store.busy)
-            Button { showDetails = true } label: { Image(systemName: "info.circle") }.accessibilityLabel("Session details")
+            Button { activeSheet = .details } label: { Image(systemName: "info.circle") }.accessibilityLabel("Session details")
         }
-        .sheet(isPresented: $showDetails) { sessionDetails }
+        .sheet(item: $activeSheet) { sheet in
+            switch sheet {
+            case .details: sessionDetails
+            }
+        }
         .task(id: phase) {
             guard phase == .active else { output = nil; return }
             await load()
@@ -335,36 +389,32 @@ struct AgentOutputView: View {
         .overlay { if phase != .active { Color.gray.ignoresSafeArea().overlay { Label("HerdrWatch", systemImage: "lock.fill") } } }
     }
     private var header: some View {
-        VStack(alignment: .leading, spacing: 9) {
-            HStack(spacing: 10) {
-                Image(systemName: "terminal.fill").font(.headline).foregroundStyle(Color.accentColor)
-                    .frame(width: 38, height: 38).background(Color.accentColor.opacity(0.11), in: RoundedRectangle(cornerRadius: 13))
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(target.agent.title).font(.headline).lineLimit(1)
-                    if let cwd = target.agent.cwd { Text(verbatim: cwd).font(.caption).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle) }
-                }
-                Spacer(minLength: 6)
-                AgentStatusBadge(status: currentStatus)
+        HStack(spacing: 9) {
+            Image(systemName: "terminal.fill").font(.subheadline).foregroundStyle(Color.accentColor)
+                .frame(width: 32, height: 32).background(Color.accentColor.opacity(0.1), in: RoundedRectangle(cornerRadius: 11))
+            VStack(alignment: .leading, spacing: 2) {
+                Text("\(target.agent.agent?.capitalized ?? "Agent") · \(target.scope.session)")
+                    .font(.subheadline.weight(.medium)).lineLimit(1)
+                Text("\(target.scope.host.address) · \(target.scope.host.username)")
+                    .font(.caption2).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle)
             }
-            HStack(spacing: 6) {
-                Image(systemName: "eye").foregroundStyle(Color.accentColor)
-                Text("Read only")
-                Text("·")
-                if let output {
-                    Text("\(error != nil || !store.connected ? "Stale" : "Updated") \(output.observed.formatted(date: .omitted, time: .shortened))")
-                } else if loading { Text("Reading live screen…") }
-                else { Text("Waiting for screen") }
-                Spacer(minLength: 0)
-            }.font(.caption).foregroundStyle(.secondary)
-            if let output, output.truncated || output.partial {
-                Label(output.truncated ? "Showing the newest part of this screen" : "The host reports an incomplete screen", systemImage: "exclamationmark.triangle")
-                    .font(.caption).foregroundStyle(.orange)
-            }
-            if let error {
-                Label(error, systemImage: "exclamationmark.circle")
-                    .font(.caption).foregroundStyle(.orange).padding(9)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(.orange.opacity(0.1), in: RoundedRectangle(cornerRadius: 10))
+            Spacer(minLength: 6)
+            AgentStatusBadge(status: currentStatus)
+        }
+    }
+    private var sourceRow: some View {
+        HStack(spacing: 7) {
+            Circle().fill(error != nil || !store.connected ? Color.orange : Color.green)
+                .frame(width: 7, height: 7)
+            Text(output?.screenOnly == false ? "Recent terminal output" : "Current terminal screen")
+                .font(.caption.weight(.medium)).foregroundStyle(.secondary)
+            Spacer(minLength: 4)
+            if let output {
+                Text("\(error != nil || !store.connected ? "Stale" : "Updated") · \(output.observed.formatted(date: .omitted, time: .shortened))")
+                    .font(.caption2).monospacedDigit().foregroundStyle(.tertiary)
+            } else {
+                Text(loading ? "Refreshing…" : "Waiting")
+                    .font(.caption2).foregroundStyle(.tertiary)
             }
         }
     }
@@ -385,7 +435,7 @@ struct AgentOutputView: View {
             #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
             #endif
-            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { showDetails = false } } }
+            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { activeSheet = nil } } }
         }
         #if os(iOS)
         .presentationDetents([.medium, .large])
@@ -408,6 +458,93 @@ struct AgentOutputView: View {
             else if output == nil { error = "Waiting for the current dashboard refresh…" }
         } catch is CancellationError { error = "Screen read interrupted. Refresh after reconnecting." }
         catch { self.error = (error as? WatchError)?.localizedDescription ?? "Could not decode the terminal screen." }
+    }
+}
+
+struct AgentPromptComposer: View {
+    @EnvironmentObject private var store: WatchStore
+    @ScaledMetric(relativeTo: .body) private var baseTextSize = 17.0
+    let target: OutputTarget
+    @State private var draft = ""
+    @State private var sending = false
+    @State private var errorMessage: String?
+    @State private var promptDelivery: PromptDeliveryNotice?
+
+    private var currentStatus: String {
+        store.snapshot?.agents.first(where: { $0.id == target.agent.id })?.agent_status ?? "unknown"
+    }
+    private var hasValidDraft: Bool {
+        !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && draft.utf8.count <= 8192
+    }
+    private var canSend: Bool {
+        hasValidDraft && store.permitsPrompt(status: currentStatus) && !sending && !store.busy
+    }
+    private var guidance: String? {
+        if store.permitsPrompt(status: currentStatus) { return nil }
+        if currentStatus == "blocked" { return "This agent is blocked. Continue on the host." }
+        if currentStatus == "working" { return "This agent is working. Wait until it is idle to send a follow-up." }
+        return "Waiting for Herdr to confirm this agent is ready."
+    }
+
+    var body: some View {
+        HStack(alignment: .bottom, spacing: 10) {
+            VStack(alignment: .leading, spacing: 5) {
+                if let promptDelivery {
+                    Label(promptDelivery.text, systemImage: promptDelivery == .uncertain ? "exclamationmark.triangle" : "checkmark.circle")
+                        .font(.caption).foregroundStyle(promptDelivery == .uncertain ? .orange : .green)
+                }
+                if let errorMessage {
+                    Label(errorMessage, systemImage: "exclamationmark.circle")
+                        .font(.caption).foregroundStyle(.orange).lineLimit(2)
+                }
+                TextField("Message the agent…", text: $draft, axis: .vertical)
+                    .font(.system(size: baseTextSize))
+                    .lineLimit(1...4)
+                    .textFieldStyle(.plain)
+                    .padding(.horizontal, 13).padding(.vertical, 11)
+                    .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 18))
+                    .overlay(RoundedRectangle(cornerRadius: 18).strokeBorder(Color.primary.opacity(0.08)))
+                    .accessibilityLabel("Instruction for \(target.agent.title)")
+                if let guidance {
+                    Text(guidance).font(.caption2).foregroundStyle(currentStatus == "blocked" ? .orange : .secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                if draft.utf8.count > 7000 {
+                    Text("\(draft.utf8.count) / 8192 bytes").font(.caption2.monospacedDigit()).foregroundStyle(.secondary)
+                }
+            }
+            Button(action: send) {
+                Group {
+                    if sending { ProgressView().tint(.white) }
+                    else { Image(systemName: "arrow.up").font(.headline.weight(.semibold)).foregroundStyle(.white) }
+                }.frame(width: 42, height: 42)
+                    .background(canSend ? Color.accentColor : Color.secondary.opacity(0.2), in: Circle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Send instruction")
+            .disabled(!canSend)
+        }
+        .padding(.horizontal, 14).padding(.top, 10).padding(.bottom, 8)
+        .background(.ultraThinMaterial)
+        .overlay(alignment: .top) { Rectangle().fill(Color.primary.opacity(0.08)).frame(height: 0.5) }
+    }
+
+    @MainActor private func send() {
+        guard canSend else { return }
+        sending = true
+        errorMessage = nil
+        Task {
+            defer { sending = false }
+            do {
+                _ = try await store.sendPrompt(for: target, text: draft)
+                draft = ""
+                promptDelivery = .submitted
+            } catch PromptSendError.deliveryUncertain {
+                promptDelivery = .uncertain
+            } catch {
+                errorMessage = (error as? LocalizedError)?.errorDescription ?? "The instruction was not sent."
+            }
+        }
     }
 }
 

@@ -248,4 +248,49 @@ extension HerdrWatchTests {
         do { _ = try await store.readOutput(for: target); XCTFail("A different host must not receive the old target") }
         catch let error as WatchError { XCTAssertTrue(error.localizedDescription.contains("host or session changed")) }
     }
+
+    func testPromptRequestsUseStructuredStdinAndCoreIdleCondition() throws {
+        let text = "Please summarize the failing test."
+        let core = ReadOperation.corePrompt("t2", text, "idle")
+        XCTAssertEqual(try core.command, ReadOperation.coreCommand)
+        let coreRequest = try XCTUnwrap(JSONSerialization.jsonObject(with: try XCTUnwrap(core.stdin)) as? [String: Any])
+        XCTAssertEqual(coreRequest["method"] as? String, "terminal.send")
+        let coreParams = try XCTUnwrap(coreRequest["params"] as? [String: Any])
+        XCTAssertEqual(coreParams["terminal"] as? String, "t2")
+        XCTAssertEqual(coreParams["text"] as? String, text)
+        XCTAssertEqual(coreParams["if"] as? String, "idle")
+        XCTAssertEqual(coreParams["force"] as? Bool, false)
+        XCTAssertEqual(coreParams["wait"] as? Bool, false)
+        XCTAssertFalse(try core.command.contains(text))
+
+        let doneCore = try XCTUnwrap(JSONSerialization.jsonObject(with: try XCTUnwrap(ReadOperation.corePrompt("t2", text, nil).stdin)) as? [String: Any])
+        let doneParams = try XCTUnwrap(doneCore["params"] as? [String: Any])
+        XCTAssertTrue(doneParams["if"] is NSNull)
+
+        let session = Session(name: "default", default: true, running: true, connection_error: nil)
+        let upstream = ReadOperation.agentPrompt(session, "a1", text)
+        XCTAssertEqual(try upstream.command, try ReadOperation.snapshot(session).command)
+        let upstreamRequest = try XCTUnwrap(JSONSerialization.jsonObject(with: try XCTUnwrap(upstream.stdin)) as? [String: Any])
+        XCTAssertEqual(upstreamRequest["method"] as? String, "agent.prompt")
+        XCTAssertFalse(try upstream.command.contains(text))
+        XCTAssertThrowsError(try ReadOperation.corePrompt("t2", "\u{1B}", nil).command)
+    }
+
+    @MainActor func testPromptEligibilityIncludesDoneOnlyForUpstreamHerdr() async {
+        let upstream = WatchStore(transport: PreviewTransport())
+        upstream.host = Host(address: "fixture", port: 22, username: "tester")
+        upstream.isPreview = true
+        await upstream.connect()
+        XCTAssertTrue(upstream.permitsPrompt(status: "idle"))
+        XCTAssertTrue(upstream.permitsPrompt(status: "done"))
+        XCTAssertFalse(upstream.permitsPrompt(status: "working"))
+        XCTAssertFalse(upstream.permitsPrompt(status: "blocked"))
+
+        let desktop = WatchStore(transport: PreviewTransport(core: true))
+        desktop.host = Host(address: "fixture", port: 22, username: "tester")
+        desktop.isPreview = true
+        await desktop.connect()
+        XCTAssertTrue(desktop.permitsPrompt(status: "idle"))
+        XCTAssertTrue(desktop.permitsPrompt(status: "done"))
+    }
 }

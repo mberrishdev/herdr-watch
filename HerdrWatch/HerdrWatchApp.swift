@@ -5,7 +5,10 @@ import SwiftUI
     init() {
         #if DEBUG
         if ProcessInfo.processInfo.environment["HERDRWATCH_PREVIEW"] == "1" {
-            let store = WatchStore(transport: PreviewTransport(core: ProcessInfo.processInfo.environment["HERDRWATCH_CORE_PREVIEW"] == "1"))
+            let store = WatchStore(transport: PreviewTransport(
+                core: ProcessInfo.processInfo.environment["HERDRWATCH_CORE_PREVIEW"] == "1",
+                prompts: ProcessInfo.processInfo.environment["HERDRWATCH_PROMPT_PREVIEW"] == "1"
+            ))
             store.host = Host(address: "sample.tailnet", port: 22, username: "developer")
             store.isPreview = true
             _store = StateObject(wrappedValue: store)
@@ -146,7 +149,7 @@ struct Dashboard: View {
                             }
                         } else if store.connected && !store.busy { emptySnapshot }
                         else if store.sessions.isEmpty && !store.busy && !store.connected { firstUseCard }
-                        Text("Foreground only · read-only SSH · refreshes every 15 seconds")
+                        Text("Foreground monitoring · agent input available · refreshes every 15 seconds")
                             .font(.caption).foregroundStyle(.tertiary).frame(maxWidth: .infinity).padding(.top, 2)
                     }.padding(.horizontal, 18).padding(.top, 12).padding(.bottom, 28)
                 }
@@ -468,7 +471,7 @@ struct AgentSessionRow: View {
                     Image(systemName: "chevron.right").font(.caption2.weight(.bold)).foregroundStyle(.tertiary)
                 }
             }.padding(13).glassPanel(cornerRadius: 21)
-        }.accessibilityHint("Opens read-only terminal output")
+        }.accessibilityHint("Opens the agent screen with live output and an instruction field")
     }
 }
 

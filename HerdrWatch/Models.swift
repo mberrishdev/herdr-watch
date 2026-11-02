@@ -76,6 +76,7 @@ enum ReadOperation {
     case runtime, coreHello, coreTerminals, coreLayout
     case sessions, probe, snapshot(Session)
     case coreOutput(String), agentOutput(Session, String)
+    case corePrompt(String, String, String?), agentPrompt(Session, String, String)
     static let pathSetup = "PATH=\"$HOME/.local/bin:/opt/homebrew/bin:/usr/local/bin:$PATH\"; export PATH; "
     static let coreCommand = pathSetup + "if [ ! -S \"${XDG_STATE_HOME:-$HOME/.local/state}/herdr-core/default/default.sock\" ]; then exit 69; fi; exec herdr-core connect --session default"
     var command: String {
@@ -89,6 +90,12 @@ enum ReadOperation {
             case .agentOutput(let session, let target):
                 try Self.validateTarget(target)
                 return try Self.snapshot(session).command
+            case .corePrompt(let target, let text, _):
+                try Self.validateTarget(target); try Self.validatePrompt(text)
+                return Self.coreCommand
+            case .agentPrompt(let session, let target, let text):
+                try Self.validateTarget(target); try Self.validatePrompt(text)
+                return try Self.snapshot(session).command
             case .sessions: return "\(Self.launcher) session list --json"
             case .probe: return "\(Self.launcher) remote-api-bridge --check"
             case .snapshot(let session):
@@ -100,6 +107,16 @@ enum ReadOperation {
     private static func validateTarget(_ target: String) throws {
         guard !target.isEmpty, target.utf8.count <= 256, !target.contains("\0") else { throw WatchError.message("Invalid terminal identity.") }
     }
+    private static func validatePrompt(_ text: String) throws {
+        let hasUnsafeControl = text.unicodeScalars.contains { scalar in
+            let value = scalar.value
+            return (value < 0x20 && value != 0x09 && value != 0x0A) || (0x7F...0x9F).contains(value)
+        }
+        guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+              text.utf8.count <= 8192, !hasUnsafeControl else {
+            throw WatchError.message("Enter a non-empty instruction up to 8 KiB. Control characters other than tabs and newlines are not allowed.")
+        }
+    }
     private static func json(_ object: [String: Any]) -> Data {
         // Only JSON primitives are constructed here; no arbitrary Encodable values.
         var data = try! JSONSerialization.data(withJSONObject: object)
@@ -109,6 +126,11 @@ enum ReadOperation {
     var stdin: Data? {
         let request: String?
         switch self {
+        case .corePrompt(let target, let text, let statusCondition):
+            return Self.json(["jsonrpc": "2.0", "id": "core-prompt", "method": "terminal.send",
+                              "params": ["terminal": target, "text": text, "if": statusCondition as Any? ?? NSNull(), "force": false, "wait": false]])
+        case .agentPrompt(_, let target, let text):
+            return Self.json(["id": "agent-prompt", "method": "agent.prompt", "params": ["target": target, "text": text]])
         case .coreOutput(let target):
             return Self.json(["jsonrpc": "2.0", "id": "core-output", "method": "terminal.read", "params": ["terminal": target, "lines": 0]])
         case .agentOutput(_, let target):

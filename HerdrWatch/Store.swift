@@ -1,11 +1,62 @@
 import SwiftUI
 
+struct PromptReceipt {
+    let timestamp = Date()
+}
+
+enum PromptSendError: LocalizedError {
+    case rejected(String)
+    case deliveryUncertain
+    var errorDescription: String? {
+        switch self {
+        case .rejected(let message): return message
+        case .deliveryUncertain: return "Herdr did not confirm whether this instruction was delivered. Inspect the agent before sending again."
+        }
+    }
+}
+
+enum PromptResponse {
+    private struct RemoteError: Decodable { let code: String?; let message: String }
+    static func decode(_ data: Data, core: Bool) throws -> PromptReceipt {
+        do {
+            if core {
+                struct Result: Decodable { let turn: UInt64 }
+                struct Envelope: Decodable {
+                    struct Failure: Decodable { let code: Int; let message: String }
+                    let jsonrpc: String
+                    let id: String
+                    let result: Result?
+                    let error: Failure?
+                }
+                let value = try JSONDecoder().decode(Envelope.self, from: data)
+                guard value.jsonrpc == "2.0", value.id == "core-prompt" else { throw PromptSendError.deliveryUncertain }
+                if let error = value.error { throw PromptSendError.rejected(error.message) }
+                guard value.result != nil else { throw PromptSendError.deliveryUncertain }
+            } else {
+                struct Result: Decodable { let type: String }
+                struct Envelope: Decodable {
+                    let id: String
+                    let result: Result?
+                    let error: RemoteError?
+                }
+                let value = try JSONDecoder().decode(Envelope.self, from: data)
+                guard value.id == "agent-prompt" else { throw PromptSendError.deliveryUncertain }
+                if let error = value.error { throw PromptSendError.rejected(error.message) }
+                guard value.result?.type == "agent_prompted" else { throw PromptSendError.deliveryUncertain }
+            }
+            return PromptReceipt()
+        } catch let error as PromptSendError { throw error }
+        catch { throw PromptSendError.deliveryUncertain }
+    }
+}
+
 @MainActor final class WatchStore: ObservableObject {
     var isPreview = false
     @Published var runtimeLabel = ""
     private var coreProfile = false
     private var coreIdentity: String?
     private var coreCanRead = false
+    private var coreCanPrompt = false
     @Published var host: Host
     @Published var sessions: [Session] = []
     @Published var selected: String?
@@ -19,6 +70,9 @@ import SwiftUI
     private var generation = UUID()
     private var refreshInProgress = false
     private let transport: SSHTransport
+    func permitsPrompt(status: String) -> Bool {
+        return status == "idle" || status == "done"
+    }
     init(transport: SSHTransport? = nil) {
         self.transport = transport ?? CitadelTransport()
         host = (UserDefaults.standard.data(forKey: "host").flatMap { try? JSONDecoder().decode(Host.self, from: $0) }) ?? Host()
@@ -46,6 +100,7 @@ import SwiftUI
             } else if runtime == "herdr-api-bridge-v1" {
                 coreProfile = false
                 coreIdentity = nil
+                coreCanPrompt = false
                 runtimeLabel = "Herdr CLI · upstream 0.9.5 / protocol 22"
             } else { throw WatchError.message("Unsupported Herdr runtime. Supported profiles: herdr-core 0.1.16 or upstream Herdr 0.9.5.") }
             stage = .snapshot
@@ -67,7 +122,9 @@ import SwiftUI
             let document = try await transport.execute(.coreLayout)
             let value = try CoreAdapter.snapshot(terminals: terminals, document: document)
             guard attempt == generation else { throw CancellationError() }
-            coreIdentity = hello.core.id; coreCanRead = hello.methods.contains("terminal.read")
+            coreIdentity = hello.core.id
+            coreCanRead = hello.methods.contains("terminal.read")
+            coreCanPrompt = hello.methods.contains("terminal.send")
             let defaultSession = Session(name: "default", default: true, running: true, connection_error: nil)
             if sessions != [defaultSession] { sessions = [defaultSession] }
             if selected != "default" { selected = "default" }
@@ -131,6 +188,56 @@ import SwiftUI
             stale = true; connected = false
             await transport.disconnect()
             throw WatchError.message(ConnectionFailure.message(error, stage: .output))
+        }
+    }
+    func sendPrompt(for target: OutputTarget, text: String) async throws -> PromptReceipt {
+        guard connected, !busy, !refreshInProgress else { throw WatchError.message("Wait for the current host refresh to finish, then try again.") }
+        guard target.scope == outputScope else { throw WatchError.message("The host or session changed. Go back and open the current agent.") }
+        let operation: ReadOperation
+        if coreProfile {
+            guard coreCanPrompt else { throw WatchError.message("This Herdr desktop runtime does not support the guarded prompt operation.") }
+            operation = .corePrompt(target.agent.terminal_id, text, target.agent.agent_status == "idle" ? "idle" : nil)
+        } else {
+            guard let session = sessions.first(where: { $0.id == selected }) else { throw WatchError.message("Session is unavailable.") }
+            operation = .agentPrompt(session, target.agent.terminal_id, text)
+        }
+        _ = try operation.command // Validate bounds before refreshing or opening an SSH write channel.
+        let attempt = generation
+        busy = true
+        defer { busy = false }
+        try await discover()
+        guard attempt == generation, connected, target.scope == outputScope else {
+            throw WatchError.message("The host or session changed. Reopen the agent before sending.")
+        }
+        guard let current = snapshot?.agents.first(where: {
+            $0.id == target.agent.id && $0.pane_id == target.agent.pane_id && $0.workspace_id == target.agent.workspace_id
+        }), current.agent == target.agent.agent, current.agent != nil, permitsPrompt(status: current.agent_status) else {
+            throw WatchError.message("This agent is no longer eligible for an instruction. Refresh the agent view and try again.")
+        }
+        let currentOperation: ReadOperation
+        if coreProfile {
+            // Done is a presentation state derived from idle activity. The core schema
+            // only accepts idle/working for its conditional field, so Done uses no
+            // status condition while keeping force:false (blocked is still rejected).
+            guard coreCanPrompt else { throw WatchError.message("This Herdr desktop runtime does not support the guarded prompt operation.") }
+            currentOperation = .corePrompt(current.terminal_id, text, current.agent_status == "idle" ? "idle" : nil)
+        } else {
+            currentOperation = operation
+        }
+        let data: Data
+        do { data = try await transport.execute(currentOperation) }
+        catch {
+            stale = true; connected = false
+            await transport.disconnect()
+            throw PromptSendError.deliveryUncertain
+        }
+        do { return try PromptResponse.decode(data, core: coreProfile) }
+        catch let error as PromptSendError {
+            if case .deliveryUncertain = error {
+                stale = true; connected = false
+                await transport.disconnect()
+            }
+            throw error
         }
     }
     func refresh(silent: Bool = false) async {
