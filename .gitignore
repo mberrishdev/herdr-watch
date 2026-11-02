@@ -2,10 +2,14 @@
 .build*/
 DerivedData/
 .swiftpm/
-host/dist/
-relay/node_modules/
-relay/.wrangler/
-relay/.dev.vars
+services/host/dist/
+apps/desktop/node_modules/
+apps/desktop/dist/
+apps/desktop/src-tauri/target/
+apps/desktop/src-tauri/binaries/herdrwatch-host-*
+services/relay/node_modules/
+services/relay/.wrangler/
+services/relay/.dev.vars
 
 # Local research and generated artifacts
 research/

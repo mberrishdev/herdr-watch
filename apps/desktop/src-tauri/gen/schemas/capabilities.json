@@ -1,0 +1,1 @@
+{"main-capability":{"identifier":"main-capability","description":"Main window can invoke the host manager commands.","local":true,"windows":["main"],"permissions":["core:default"]}}

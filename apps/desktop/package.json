@@ -1,0 +1,24 @@
+{
+  "name": "herdrwatch-host-manager",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1",
+    "build": "tsc && vite build",
+    "build:sidecar": "node scripts/build-sidecar.mjs",
+    "tauri": "tauri",
+    "tauri:dev": "npm run build:sidecar && tauri dev",
+    "tauri:build": "tauri build"
+  },
+  "dependencies": {
+    "@tauri-apps/api": "^2.9.1",
+    "qrcode": "^1.5.4"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.9.4",
+    "@types/qrcode": "^1.5.5",
+    "typescript": "~5.9.3",
+    "vite": "^7.1.12"
+  }
+}

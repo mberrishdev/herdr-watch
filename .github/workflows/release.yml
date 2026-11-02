@@ -1,0 +1,98 @@
+name: Desktop release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  macos:
+    name: macOS universal DMG
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: services/host/go.mod
+      - name: Archive the native Mac host app
+        run: >-
+          xcodebuild -project HerdrWatch.xcodeproj -scheme HerdrWatchHost
+          -configuration Release -destination 'generic/platform=macOS'
+          -archivePath "$RUNNER_TEMP/HerdrWatchHost.xcarchive" archive
+          CODE_SIGNING_ALLOWED=NO
+      - name: Create DMG installer
+        env:
+          VERSION: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/dmg-root" release-assets
+          ditto "$RUNNER_TEMP/HerdrWatchHost.xcarchive/Products/Applications/HerdrWatchHost.app" "$RUNNER_TEMP/dmg-root/HerdrWatchHost.app"
+          ln -s /Applications "$RUNNER_TEMP/dmg-root/Applications"
+          hdiutil create -volname "HerdrWatch Host $VERSION" -srcfolder "$RUNNER_TEMP/dmg-root" -ov -format UDZO "release-assets/HerdrWatch-Host-macos-universal.dmg"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: HerdrWatch-Host-macos-universal
+          path: release-assets/*.dmg
+          if-no-files-found: error
+
+  windows:
+    name: Windows NSIS installer
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: apps/desktop/package-lock.json
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: services/host/go.mod
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install desktop dependencies
+        working-directory: apps/desktop
+        run: npm ci
+      - name: Build the Windows NSIS installer
+        working-directory: apps/desktop
+        run: npm run tauri:build -- --bundles nsis
+      - name: Give the setup package a clear release name
+        shell: pwsh
+        run: |
+          $installer = Get-ChildItem "apps/desktop/src-tauri/target/release/bundle/nsis/*.exe" | Select-Object -First 1
+          if (-not $installer) { throw "Tauri did not produce an NSIS setup installer." }
+          New-Item -ItemType Directory -Force release-assets | Out-Null
+          Copy-Item $installer.FullName "release-assets/HerdrWatch-Host-windows-x64-setup.exe"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: HerdrWatch-Host-windows-x64
+          path: release-assets/*.exe
+          if-no-files-found: error
+
+  publish:
+    name: Publish GitHub release
+    needs: [macos, windows]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: release-assets
+          merge-multiple: true
+      - uses: softprops/action-gh-release@v3
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: HerdrWatch ${{ github.ref_name }}
+          draft: false
+          prerelease: false
+          body: |
+            First desktop companion release.
+
+            - **macOS:** Universal DMG installer for Apple Silicon and Intel Macs. It contains the native HerdrWatch Host menu-bar app.
+            - **Windows:** NSIS setup installer for x64 Windows. This is a complete installer, not the raw application executable.
+
+            Windows requires OpenSSH Server and Herdr installed for the same Windows account. Windows agent-session discovery is early and still needs broader host validation.
+            The installers are not code-signed or notarized; Windows SmartScreen or macOS Gatekeeper may show a first-run warning.
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

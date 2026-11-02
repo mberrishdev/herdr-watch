@@ -28,13 +28,14 @@ targets:
   HerdrWatch:
     type: application
     platform: iOS
-    sources: [HerdrWatch]
+    sources: [apps/ios/HerdrWatch]
     settings:
       base:
         CODE_SIGN_STYLE: Automatic
         DEVELOPMENT_TEAM: J9RQ24X3A8
         'CODE_SIGNING_ALLOWED[sdk=iphoneos*]': YES
         TARGETED_DEVICE_FAMILY: '1'
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         INFOPLIST_KEY_UILaunchScreen_Generation: YES
         INFOPLIST_KEY_NSCameraUsageDescription: Scan the QR code printed by your HerdrWatch host companion to pair this iPhone securely.
     dependencies: &deps
@@ -45,12 +46,39 @@ targets:
   HerdrWatchPreview:
     type: application
     platform: macOS
-    sources: [HerdrWatch]
+    sources: [apps/ios/HerdrWatch]
     dependencies: *deps
+  HerdrWatchHost:
+    type: application
+    platform: macOS
+    sources: [apps/macos-host/HerdrWatchHost]
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: dev.herdr.HerdrWatchHost
+        INFOPLIST_KEY_LSUIElement: YES
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        CODE_SIGNING_ALLOWED: NO
+    postBuildScripts:
+      - name: Build universal Go host companion
+        basedOnDependencyAnalysis: false
+        script: |
+          set -euo pipefail
+          export PATH="/opt/homebrew/bin:/usr/local/go/bin:/usr/local/bin:$PATH"
+          if ! command -v go >/dev/null 2>&1; then
+            echo "error: Go is required to build HerdrWatchHost. Install Go from https://go.dev/dl/ and build again."
+            exit 1
+          fi
+          cd "$SRCROOT/services/host"
+          resource_dir="$TARGET_BUILD_DIR/$UNLOCALIZED_RESOURCES_FOLDER_PATH"
+          mkdir -p "$resource_dir"
+          GOOS=darwin GOARCH=arm64 go build -trimpath -o "$DERIVED_FILE_DIR/herdrwatch-host-arm64" ./cmd/herdrwatch-host
+          GOOS=darwin GOARCH=amd64 go build -trimpath -o "$DERIVED_FILE_DIR/herdrwatch-host-amd64" ./cmd/herdrwatch-host
+          /usr/bin/lipo -create "$DERIVED_FILE_DIR/herdrwatch-host-arm64" "$DERIVED_FILE_DIR/herdrwatch-host-amd64" -output "$resource_dir/herdrwatch-host"
+          chmod 755 "$resource_dir/herdrwatch-host"
   HerdrWatchTests:
     type: bundle.unit-test
     platform: macOS
-    sources: [Tests]
+    sources: [apps/ios/Tests]
     dependencies:
       - target: HerdrWatchPreview
 schemes:
@@ -64,3 +92,7 @@ schemes:
         HerdrWatchPreview: all
     test:
       targets: [HerdrWatchTests]
+  HerdrWatchHost:
+    build:
+      targets:
+        HerdrWatchHost: all

@@ -7,7 +7,7 @@ Cloudflare Worker relay. The relay forwards binary SSH frames; the SSH stream
 is encrypted and host-key pinned end to end by Citadel. The relay cannot read
 SSH passwords, Herdr session data, or agent output. It can observe connection
 metadata (relay ID, timing, and traffic volume). The Mac companion listens only
-on its own loopback SSH port and opens an outbound WSS connection, so no
+on the host's loopback SSH port and opens an outbound WSS connection, so no
 inbound router port or VPN app is needed.
 
 ### One-time maintainer deployment
@@ -16,7 +16,7 @@ Deploy the shared Worker once under the HerdrWatch service account. This is not
 per-user Cloudflare setup:
 
 ```sh
-cd relay
+cd services/relay
 npm ci
 npm run deploy
 ```
@@ -25,9 +25,16 @@ Cloudflare will print the Worker URL, for example
 `https://herdrwatch-relay.<account>.workers.dev`. The host CLI expects the
 WebSocket form, `wss://herdrwatch-relay.<account>.workers.dev`.
 
-### Pair a computer and iPhone
+### Pair a Mac and iPhone in the Mac host app
 
-Build `host/` for macOS or Windows, then on the computer run:
+In Xcode, choose the **HerdrWatchHost** scheme and run it on your Mac. The
+menu-bar app can create the pairing QR, start or stop the relay, and show
+whether the paired iPhone is connected. Scan the QR in HerdrWatch → Settings →
+Connection, then start the relay in the Mac app. You do not need to keep a
+Terminal window open.
+
+The companion CLI remains available for setup and troubleshooting. Build
+`services/host/` for macOS or Windows, then run:
 
 ```sh
 herdrwatch-host relay init --endpoint wss://herdrwatch-relay.<account>.workers.dev
@@ -50,9 +57,24 @@ to that paired computer. Re-pair the host if the code is exposed.
 
 Small SwiftUI iPhone MVP for one existing SSH host. It discovers Herdr sessions and agents, reads live terminal screens, and provides an inline field to send an explicit instruction to a detected agent. Requires iOS 17+, ordinary SSH password authentication, and either **Herdr desktop / herdr-core 0.1.16 (generation 1)** or **upstream Herdr 0.9.5 (protocol 22)** on the remote SSH PATH. The shared relay is an optional Cloudflare Worker deployed once by the HerdrWatch publisher; SSH remains encrypted end to end.
 
-## Cross-platform host companion (early development)
+## Host manager scope
 
-The Go CLI in [host/](host/README.md) targets macOS and Windows. Its shared-relay mode needs no Cloudflare login or Cloudflare One app on the phone. Its older Cloudflare Tunnel mode remains available for users who already use Cloudflare One/WARP. HerdrWatch remains an iPhone app; the companion is the cross-platform desktop component.
+The Go CLI in [services/host/](services/host/README.md) targets macOS and Windows. The native SwiftUI menu-bar app is in `apps/macos-host/`. The cross-platform Tauri manager in [apps/desktop/](apps/desktop/README.md) is the Windows desktop path and also runs on macOS. Both managers show relay state and can create the phone pairing QR.
+The older Cloudflare Tunnel mode remains available for people who already use
+Cloudflare One/WARP.
+
+## Desktop downloads
+
+Download the latest [HerdrWatch Host release](https://github.com/mberrishdev/herdr-watch/releases/latest). It includes a universal DMG for Apple Silicon and Intel Macs and a full Windows x64 setup installer. The Windows installer is an NSIS setup wizard, not a standalone app executable. Windows requires OpenSSH Server and Herdr installed for the same account.
+
+## Repository layout
+
+- `apps/ios/` — iPhone app and UI preview fixture.
+- `apps/macos-host/` — native Mac menu-bar host manager.
+- `apps/desktop/` — Tauri manager for Windows and macOS.
+- `services/host/` — Go companion and relay client.
+- `services/relay/` — shared Cloudflare Worker.
+- `research/` and `output/` — local-only research and generated notes; ignored by Git.
 
 ## Build
 
@@ -63,6 +85,8 @@ xcodebuild -project HerdrWatch.xcodeproj -scheme HerdrWatch -sdk iphonesimulator
 ```
 
 `project.yml` is the XcodeGen source. Regenerate with `xcodegen generate`. Citadel is pinned to `ae8562f895de06ccb86fdb1cbb65fd99c8976e12`; transitive dependencies are locked by the checked-in `Package.resolved`.
+
+The **HerdrWatchHost** scheme builds the Mac menu-bar manager from `apps/macos-host/` and embeds a universal Go companion for Apple Silicon and Intel Macs. Building that target requires Go and Xcode's `lipo` tool.
 
 ## Connect
 

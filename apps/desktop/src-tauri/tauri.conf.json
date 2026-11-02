@@ -1,0 +1,26 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "HerdrWatch Host",
+  "version": "0.1.0",
+  "identifier": "dev.herdr.HerdrWatchHostManager",
+  "build": {
+    "beforeDevCommand": "npm run dev",
+    "devUrl": "http://127.0.0.1:1420",
+    "beforeBuildCommand": "npm run build:sidecar && npm run build",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [
+      { "title": "HerdrWatch Host", "width": 920, "height": 760, "minWidth": 700, "minHeight": 640 }
+    ],
+    "security": {
+      "csp": "default-src 'self' tauri: asset: http://tauri.localhost; connect-src 'self' ipc: http://ipc.localhost http://127.0.0.1:1420 ws://127.0.0.1:1420; img-src 'self' asset: http://asset.localhost data:; style-src 'self' 'unsafe-inline'; script-src 'self'"
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "externalBin": ["binaries/herdrwatch-host"],
+    "windows": { "nsis": { "displayLanguageSelector": false } }
+  }
+}
