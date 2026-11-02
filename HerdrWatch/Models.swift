@@ -20,7 +20,7 @@ enum WatchError: LocalizedError {
         }
     }
 }
-struct Session: Decodable, Identifiable {
+struct Session: Decodable, Equatable, Identifiable {
     let name: String
     let `default`: Bool
     let running: Bool
@@ -28,7 +28,7 @@ struct Session: Decodable, Identifiable {
     var id: String { name }
     var state: String { connection_error != nil ? "Unavailable" : running ? "Running" : "Stopped" }
 }
-struct Snapshot: Decodable {
+struct Snapshot: Decodable, Equatable {
     let version: String
     let `protocol`: Int
     let workspaces: [Workspace]
@@ -36,7 +36,7 @@ struct Snapshot: Decodable {
     let panes: [Pane]
     let agents: [Agent]
 }
-struct Workspace: Decodable, Identifiable {
+struct Workspace: Decodable, Equatable, Identifiable {
     let workspace_id: String
     let label: String
     let agent_status: String
@@ -44,18 +44,18 @@ struct Workspace: Decodable, Identifiable {
     let tab_count: Int
     var id: String { workspace_id }
 }
-struct Tab: Decodable, Identifiable {
+struct Tab: Decodable, Equatable, Identifiable {
     let tab_id: String
     let workspace_id: String
     var label: String? = nil
     var id: String { tab_id }
 }
-struct Pane: Decodable, Identifiable {
+struct Pane: Decodable, Equatable, Identifiable {
     let pane_id: String
     let tab_id: String
     var id: String { pane_id }
 }
-struct Agent: Decodable, Identifiable {
+struct Agent: Decodable, Equatable, Identifiable {
     let terminal_id: String
     let workspace_id: String
     let pane_id: String

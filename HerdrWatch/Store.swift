@@ -17,13 +17,14 @@ import SwiftUI
     @Published var message: String?
     @Published var pendingKey: String?
     private var generation = UUID()
+    private var refreshInProgress = false
     private let transport: SSHTransport
     init(transport: SSHTransport? = nil) {
         self.transport = transport ?? CitadelTransport()
         host = (UserDefaults.standard.data(forKey: "host").flatMap { try? JSONDecoder().decode(Host.self, from: $0) }) ?? Host()
     }
     func connect() async {
-        guard !busy else { return }
+        guard !busy, !refreshInProgress else { return }
         generation = UUID()
         let attempt = generation
         busy = true; message = nil; pendingKey = nil; stale = true
@@ -67,30 +68,42 @@ import SwiftUI
             let value = try CoreAdapter.snapshot(terminals: terminals, document: document)
             guard attempt == generation else { throw CancellationError() }
             coreIdentity = hello.core.id; coreCanRead = hello.methods.contains("terminal.read")
-            sessions = [Session(name: "default", default: true, running: true, connection_error: nil)]
-            selected = "default"; snapshot = value; observed = Date(); stale = false
+            let defaultSession = Session(name: "default", default: true, running: true, connection_error: nil)
+            if sessions != [defaultSession] { sessions = [defaultSession] }
+            if selected != "default" { selected = "default" }
+            if snapshot != value { snapshot = value }
+            observed = Date()
+            if stale { stale = false }
             return
         }
         struct List: Decodable { let sessions: [Session] }
         let items = try JSONDecoder().decode(List.self, from: await transport.execute(.sessions)).sessions
         guard attempt == generation else { throw CancellationError() }
-        sessions = items
+        if sessions != items { sessions = items }
         if !items.contains(where: { $0.id == selected && $0.running && $0.connection_error == nil }) {
-            selected = items.first(where: { $0.running && $0.connection_error == nil })?.id
-            snapshot = nil; observed = nil
+            let next = items.first(where: { $0.running && $0.connection_error == nil })?.id
+            if selected != next { selected = next }
+            if snapshot != nil { snapshot = nil }
+            if observed != nil { observed = nil }
         }
         try await fetchSnapshot()
     }
     private func fetchSnapshot() async throws {
         let attempt = generation
-        guard let session = sessions.first(where: { $0.id == selected && $0.running && $0.connection_error == nil }) else { snapshot = nil; observed = nil; return }
+        guard let session = sessions.first(where: { $0.id == selected && $0.running && $0.connection_error == nil }) else {
+            if snapshot != nil { snapshot = nil }
+            if observed != nil { observed = nil }
+            return
+        }
         let value = try Wire.snapshot(await transport.execute(.snapshot(session)))
         guard attempt == generation else { throw CancellationError() }
-        snapshot = value; observed = Date(); stale = false
+        if snapshot != value { snapshot = value }
+        observed = Date()
+        if stale { stale = false }
     }
     var outputScope: OutputScope { OutputScope(host: host, session: selected ?? "default", coreIdentity: coreIdentity) }
     func readOutput(for target: OutputTarget) async throws -> TerminalOutput? {
-        guard connected, !busy else { return nil }
+        guard connected, !busy, !refreshInProgress else { return nil }
         guard target.scope == outputScope else { throw WatchError.message("The host or session changed. Go back and open the current agent.") }
         let attempt = generation
         busy = true
@@ -120,12 +133,21 @@ import SwiftUI
             throw WatchError.message(ConnectionFailure.message(error, stage: .output))
         }
     }
-    func refresh() async {
-        guard connected, !busy else { return }
-        busy = true; message = nil
-        defer { busy = false }
+    func refresh(silent: Bool = false) async {
+        guard connected, !busy, !refreshInProgress else { return }
+        refreshInProgress = true
+        if !silent { busy = true; message = nil }
+        defer {
+            refreshInProgress = false
+            if !silent { busy = false }
+        }
         do { try await discover() }
-        catch { stale = true; message = (error as? WatchError)?.localizedDescription ?? "Refresh failed. Showing the last observed state. Reconnect to retry."; await transport.disconnect(); connected = false }
+        catch {
+            if !stale { stale = true }
+            message = (error as? WatchError)?.localizedDescription ?? "Refresh failed. Showing the last observed state. Reconnect to retry."
+            await transport.disconnect()
+            connected = false
+        }
     }
     func select(_ id: String) async {
         guard !busy else { return }
