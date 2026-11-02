@@ -54,11 +54,12 @@ import SwiftUI
 
     private func updateStatusItem() {
         guard let controller, let button = statusItem?.button else { return }
-        let logo = NSImage(named: "HerdrMark")
+        let logo = NSImage(named: "HerdrMenuBarMark")
         logo?.size = NSSize(width: 18, height: 18)
-        logo?.isTemplate = false
+        logo?.isTemplate = true
         button.image = logo
-        button.title = " Herdr"
+        button.title = ""
+        button.imagePosition = .imageOnly
         button.toolTip = "HerdrWatch Host · \(controller.state.title)"
     }
 
