@@ -5,6 +5,24 @@ status and basic activity. It bundles the Go companion, so end users do not
 need to install Go. The same desktop manager can be built for Windows and
 macOS; the native SwiftUI menu-bar manager remains available for Mac users.
 
+## Automatic updates
+
+The Windows Tauri manager checks the latest GitHub release when it starts and
+installs signed updates from `latest.json`. Release builds require the
+`TAURI_SIGNING_PRIVATE_KEY`, `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`, and
+`TAURI_SIGNING_PUBLIC_KEY` GitHub Actions secrets.
+
+The native macOS host currently ships as an unsigned DMG. macOS automatic
+updates require an Apple Developer ID certificate and a Sparkle signing key,
+so updates must be installed manually from the latest GitHub release.
+
+The release workflow requires these GitHub Actions secrets:
+
+- Windows/Tauri: `TAURI_SIGNING_PRIVATE_KEY`, `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`,
+  and `TAURI_SIGNING_PUBLIC_KEY`.
+- macOS requires no signing secrets. macOS releases are unsigned and may show
+  a Gatekeeper warning on first launch.
+
 ## Windows host requirements
 
 - Windows 10/11 with WebView2 Runtime.

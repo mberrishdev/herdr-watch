@@ -66,6 +66,7 @@ import SwiftUI
     func applicationWillTerminate(_ notification: Notification) {
         controller?.stop()
     }
+
 }
 
 @MainActor final class HostController: ObservableObject {

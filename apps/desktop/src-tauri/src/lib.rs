@@ -84,6 +84,8 @@ fn err(error: impl std::fmt::Display) -> String { error.to_string() }
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_process::init())
         .manage(RelayProcess::default())
         .invoke_handler(tauri::generate_handler![relay_status, create_pairing, show_pairing, start_relay, stop_relay])
         .on_window_event(|window, event| {

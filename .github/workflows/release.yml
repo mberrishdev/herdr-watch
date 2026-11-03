@@ -19,11 +19,13 @@ jobs:
           go-version-file: services/host/go.mod
           cache-dependency-path: services/host/go.sum
       - name: Archive the native Mac host app
-        run: >-
-          xcodebuild -project HerdrWatch.xcodeproj -scheme HerdrWatchHost
-          -configuration Release -destination 'generic/platform=macOS'
-          -archivePath "$RUNNER_TEMP/HerdrWatchHost.xcarchive" archive
-          CODE_SIGNING_ALLOWED=NO
+        run: |
+          set -euo pipefail
+          MARKETING_VERSION="${GITHUB_REF_NAME#v}" \
+          CURRENT_PROJECT_VERSION="${GITHUB_RUN_NUMBER}" \
+          xcodebuild -project HerdrWatch.xcodeproj -scheme HerdrWatchHost \
+            -configuration Release -destination 'generic/platform=macOS' \
+            -archivePath "$RUNNER_TEMP/HerdrWatchHost.xcarchive" archive \
       - name: Create DMG installer
         env:
           VERSION: ${{ github.ref_name }}
@@ -33,10 +35,11 @@ jobs:
           ditto "$RUNNER_TEMP/HerdrWatchHost.xcarchive/Products/Applications/HerdrWatchHost.app" "$RUNNER_TEMP/dmg-root/HerdrWatchHost.app"
           ln -s /Applications "$RUNNER_TEMP/dmg-root/Applications"
           hdiutil create -volname "HerdrWatch Host $VERSION" -srcfolder "$RUNNER_TEMP/dmg-root" -ov -format UDZO "release-assets/HerdrWatch-Host-macos-universal.dmg"
+          ditto -c -k --sequesterRsrc --keepParent "$RUNNER_TEMP/HerdrWatchHost.xcarchive/Products/Applications/HerdrWatchHost.app" "release-assets/HerdrWatch-Host-macos-universal.zip"
       - uses: actions/upload-artifact@v4
         with:
           name: HerdrWatch-Host-macos-universal
-          path: release-assets/*.dmg
+          path: release-assets/*
           if-no-files-found: error
 
   windows:
@@ -57,9 +60,31 @@ jobs:
       - name: Install desktop dependencies
         working-directory: apps/desktop
         run: npm ci
+      - name: Validate Tauri signing secrets
+        shell: pwsh
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          TAURI_SIGNING_PUBLIC_KEY: ${{ secrets.TAURI_SIGNING_PUBLIC_KEY }}
+        run: |
+          if (-not $env:TAURI_SIGNING_PRIVATE_KEY) { throw "TAURI_SIGNING_PRIVATE_KEY is required." }
+          if (-not $env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD) { throw "TAURI_SIGNING_PRIVATE_KEY_PASSWORD is required." }
+          if (-not $env:TAURI_SIGNING_PUBLIC_KEY) { throw "TAURI_SIGNING_PUBLIC_KEY is required." }
       - name: Build the Windows NSIS installer
         working-directory: apps/desktop
-        run: npm run tauri:build -- --bundles nsis
+        run: |
+          $config = Get-Content "src-tauri/tauri.conf.json" -Raw | ConvertFrom-Json
+          $config.version = $env:VERSION.Substring(1)
+          $config.bundle.createUpdaterArtifacts = $true
+          $config.plugins.updater.pubkey = $env:TAURI_SIGNING_PUBLIC_KEY
+          $configPath = Join-Path $env:RUNNER_TEMP "tauri.release.conf.json"
+          $config | ConvertTo-Json -Depth 20 | Set-Content $configPath
+          npm run tauri:build -- --bundles nsis --config $configPath
+        env:
+          VERSION: ${{ github.ref_name }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          TAURI_SIGNING_PUBLIC_KEY: ${{ secrets.TAURI_SIGNING_PUBLIC_KEY }}
       - name: Give the setup package a clear release name
         shell: pwsh
         run: |
@@ -67,10 +92,15 @@ jobs:
           if (-not $installer) { throw "Tauri did not produce an NSIS setup installer." }
           New-Item -ItemType Directory -Force release-assets | Out-Null
           Copy-Item $installer.FullName "release-assets/HerdrWatch-Host-windows-x64-setup.exe"
+          $updateArchive = Get-ChildItem "apps/desktop/src-tauri/target/release/bundle/nsis/*.nsis.zip" | Select-Object -First 1
+          $signature = Get-ChildItem "apps/desktop/src-tauri/target/release/bundle/nsis/*.nsis.zip.sig" | Select-Object -First 1
+          if (-not $updateArchive -or -not $signature) { throw "Tauri updater artifacts were not produced." }
+          Copy-Item $updateArchive.FullName "release-assets/HerdrWatch-Host-windows-x64.nsis.zip"
+          Copy-Item $signature.FullName "release-assets/HerdrWatch-Host-windows-x64.nsis.zip.sig"
       - uses: actions/upload-artifact@v4
         with:
           name: HerdrWatch-Host-windows-x64
-          path: release-assets/*.exe
+          path: release-assets/*
           if-no-files-found: error
 
   publish:
@@ -82,12 +112,26 @@ jobs:
         with:
           path: release-assets
           merge-multiple: true
+      - name: Create Windows updater metadata
+        env:
+          VERSION: ${{ github.ref_name }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          version="${VERSION#v}"
+          signature="$(cat release-assets/HerdrWatch-Host-windows-x64.nsis.zip.sig)"
+          jq -n \
+            --arg version "$version" \
+            --arg signature "$signature" \
+            --arg url "https://github.com/${REPOSITORY}/releases/download/${VERSION}/HerdrWatch-Host-windows-x64.nsis.zip" \
+            '{version: $version, notes: "A new HerdrWatch Host release is available.", platforms: {"windows-x86_64": {signature: $signature, url: $url}}}' \
+            > release-assets/latest.json
       - uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ github.ref_name }}
           name: HerdrWatch ${{ github.ref_name }}
           draft: false
-          prerelease: false
+          prerelease: ${{ contains(github.ref_name, '-beta') || contains(github.ref_name, '-alpha') || contains(github.ref_name, '-rc') }}
           files: release-assets/*
           fail_on_unmatched_files: true
           body: |

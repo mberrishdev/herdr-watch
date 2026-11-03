@@ -20,7 +20,17 @@
   "bundle": {
     "active": true,
     "targets": "all",
+    "createUpdaterArtifacts": false,
     "externalBin": ["binaries/herdrwatch-host"],
     "windows": { "nsis": { "displayLanguageSelector": false } }
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "${TAURI_SIGNING_PUBLIC_KEY}",
+      "endpoints": [
+        "https://github.com/mberrishdev/herdr-watch/releases/latest/download/latest.json"
+      ],
+      "dialog": false
+    }
   }
 }

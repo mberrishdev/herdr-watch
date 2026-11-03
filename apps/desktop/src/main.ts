@@ -1,6 +1,8 @@
 import QRCode from "qrcode";
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
+import { check } from "@tauri-apps/plugin-updater";
+import { relaunch } from "@tauri-apps/plugin-process";
 import "./style.css";
 
 type Status = { configured: boolean; endpoint?: string };
@@ -15,6 +17,8 @@ let busy = false;
 let errorMessage = "";
 let activity = ["Host manager started."];
 let unlisten: UnlistenFn | undefined;
+let updateMessage = "";
+let updateAvailable = false;
 
 function esc(value: string) {
   return value.replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[char]!);
@@ -47,6 +51,7 @@ function render() {
         <p>${esc(descriptionForState())}</p>
       </section>
       ${errorMessage ? `<div class="error"><span>!</span><div>${esc(errorMessage)}</div><button id="clear-error" aria-label="Dismiss">×</button></div>` : ""}
+      ${updateAvailable ? `<div class="update"><span>↻</span><div>${esc(updateMessage || "A new version is ready.")}</div><button id="install-update">Install</button></div>` : ""}
       <section class="card pairing-card">
         <div class="card-heading"><div class="step-icon">${viewState === "setup" ? "01" : "✓"}</div><div><h2>Connect your iPhone</h2><p>Pair once, then start the encrypted relay.</p></div></div>
         ${pairingCode ? `<div class="pairing-preview"><div class="qr-wrap"><canvas id="qr" width="200" height="200"></canvas></div><div class="pairing-info"><span class="tag">PAIRING CODE READY</span><h3>Scan with HerdrWatch</h3><p>On iPhone: <b>Settings → Connection → Encrypted relay → Scan QR</b></p><button class="text-button" id="hide-qr">Hide QR code</button></div></div>` : `
@@ -82,8 +87,41 @@ function render() {
   document.querySelector("#hide-qr-2")?.addEventListener("click", hidePairing);
   document.querySelector("#done-pairing")?.addEventListener("click", async () => { hidePairing(); await startRelay(); });
   document.querySelector("#clear-error")?.addEventListener("click", () => { errorMessage = ""; render(); });
+  document.querySelector("#install-update")?.addEventListener("click", installUpdate);
   const canvas = document.querySelector<HTMLCanvasElement>("#qr");
   if (canvas && pairingCode) QRCode.toCanvas(canvas, pairingCode, { width: 200, margin: 1, color: { dark: "#15233c", light: "#ffffff" }, errorCorrectionLevel: "M" });
+}
+
+async function checkForUpdates() {
+  try {
+    const update = await check();
+    if (update) {
+      updateAvailable = true;
+      updateMessage = `HerdrWatch ${update.version} is available.`;
+      render();
+    }
+  } catch (error) {
+    activity.push(`Update check failed: ${String(error)}`);
+  }
+}
+
+async function installUpdate() {
+  try {
+    updateMessage = "Downloading update…";
+    render();
+    const update = await check();
+    if (!update) {
+      updateAvailable = false;
+      render();
+      return;
+    }
+    await update.downloadAndInstall();
+    await relaunch();
+  } catch (error) {
+    updateAvailable = false;
+    errorMessage = `The update could not be installed: ${String(error)}`;
+    render();
+  }
 }
 
 async function refreshStatus() {
@@ -127,6 +165,7 @@ function addActivity(line: string) { activity.push(line); if (activity.length > 
 
 render();
 void refreshStatus();
+void checkForUpdates();
 void listen<string>("relay-event", ({ payload }) => {
   const separator = payload.indexOf(":");
   const kind = payload.slice(0, separator);
