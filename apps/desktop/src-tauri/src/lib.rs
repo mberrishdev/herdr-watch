@@ -13,6 +13,34 @@ struct PairingReply { pairing_code: String }
 #[serde(rename_all = "camelCase")]
 struct RelayStatus { configured: bool, endpoint: Option<String> }
 
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct SshReadiness { open_ssh_installed: bool, sshd_running: bool, firewall_ready: bool, herdr_available: bool }
+
+#[tauri::command]
+fn ssh_readiness() -> Result<SshReadiness, String> {
+    #[cfg(windows)]
+    {
+        let script = r#"
+$capability = (Get-WindowsCapability -Online -Name OpenSSH.Server~~~~0.0.1.0 -ErrorAction SilentlyContinue).State -eq 'Installed'
+$service = Get-Service -Name sshd -ErrorAction SilentlyContinue
+$firewall = @(Get-NetFirewallRule -DisplayGroup 'OpenSSH Server' -ErrorAction SilentlyContinue | Where-Object Enabled -eq 'True').Count -gt 0
+$herdr = $null -ne (Get-Command herdr -ErrorAction SilentlyContinue)
+[PSCustomObject]@{ open_ssh_installed = $capability; sshd_running = ($null -ne $service -and $service.Status -eq 'Running'); firewall_ready = $firewall; herdr_available = $herdr } | ConvertTo-Json -Compress
+"#;
+        let output = std::process::Command::new("powershell.exe")
+            .args(["-NoProfile", "-NonInteractive", "-Command", script])
+            .output()
+            .map_err(err)?;
+        if !output.status.success() { return Err(stderr_message(&output.stderr)); }
+        return serde_json::from_slice(&output.stdout).map_err(err);
+    }
+    #[cfg(not(windows))]
+    {
+        Err("Windows SSH checks are only available on Windows.".into())
+    }
+}
+
 #[tauri::command]
 async fn relay_status(app: AppHandle) -> Result<RelayStatus, String> {
     let output = app.shell().sidecar("herdrwatch-host").map_err(err)?.args(["relay", "status", "--json"]).output().await.map_err(err)?;
@@ -87,7 +115,7 @@ pub fn run() {
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
         .manage(RelayProcess::default())
-        .invoke_handler(tauri::generate_handler![relay_status, create_pairing, show_pairing, start_relay, stop_relay])
+        .invoke_handler(tauri::generate_handler![relay_status, ssh_readiness, create_pairing, show_pairing, start_relay, stop_relay])
         .on_window_event(|window, event| {
             if matches!(event, tauri::WindowEvent::CloseRequested { .. }) {
                 if let Some(process) = window.try_state::<RelayProcess>() {
