@@ -92,11 +92,11 @@ jobs:
           if (-not $installer) { throw "Tauri did not produce an NSIS setup installer." }
           New-Item -ItemType Directory -Force release-assets | Out-Null
           Copy-Item $installer.FullName "release-assets/HerdrWatch-Host-windows-x64-setup.exe"
-          $updateArchive = Get-ChildItem "apps/desktop/src-tauri/target/release/bundle/nsis/*.nsis.zip" | Select-Object -First 1
-          $signature = Get-ChildItem "apps/desktop/src-tauri/target/release/bundle/nsis/*.nsis.zip.sig" | Select-Object -First 1
+          $updateArchive = Get-ChildItem "apps/desktop/src-tauri/target/release/bundle/nsis/*-setup.exe" | Select-Object -First 1
+          $signature = Get-ChildItem "apps/desktop/src-tauri/target/release/bundle/nsis/*-setup.exe.sig" | Select-Object -First 1
           if (-not $updateArchive -or -not $signature) { throw "Tauri updater artifacts were not produced." }
-          Copy-Item $updateArchive.FullName "release-assets/HerdrWatch-Host-windows-x64.nsis.zip"
-          Copy-Item $signature.FullName "release-assets/HerdrWatch-Host-windows-x64.nsis.zip.sig"
+          Copy-Item $updateArchive.FullName "release-assets/HerdrWatch-Host-windows-x64-setup.exe"
+          Copy-Item $signature.FullName "release-assets/HerdrWatch-Host-windows-x64-setup.exe.sig"
       - uses: actions/upload-artifact@v4
         with:
           name: HerdrWatch-Host-windows-x64
@@ -119,11 +119,11 @@ jobs:
         run: |
           set -euo pipefail
           version="${VERSION#v}"
-          signature="$(cat release-assets/HerdrWatch-Host-windows-x64.nsis.zip.sig)"
+          signature="$(cat release-assets/HerdrWatch-Host-windows-x64-setup.exe.sig)"
           jq -n \
             --arg version "$version" \
             --arg signature "$signature" \
-            --arg url "https://github.com/${REPOSITORY}/releases/download/${VERSION}/HerdrWatch-Host-windows-x64.nsis.zip" \
+            --arg url "https://github.com/${REPOSITORY}/releases/download/${VERSION}/HerdrWatch-Host-windows-x64-setup.exe" \
             '{version: $version, notes: "A new HerdrWatch Host release is available.", platforms: {"windows-x86_64": {signature: $signature, url: $url}}}' \
             > release-assets/latest.json
       - uses: softprops/action-gh-release@v3
