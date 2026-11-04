@@ -1,0 +1,25 @@
+name: macOS host build
+
+on:
+  pull_request:
+    paths:
+      - "apps/macos-host/**"
+      - "services/host/**"
+      - "HerdrWatch.xcodeproj/**"
+      - ".github/workflows/macos-host.yml"
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: services/host/go.mod
+          cache-dependency-path: services/host/go.sum
+      - name: Build the native Mac host
+        run: >-
+          xcodebuild -project HerdrWatch.xcodeproj -scheme HerdrWatchHost
+          -configuration Release -destination 'generic/platform=macOS'
+          CODE_SIGNING_ALLOWED=NO build

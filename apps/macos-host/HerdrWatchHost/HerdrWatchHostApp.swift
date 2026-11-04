@@ -559,6 +559,7 @@ private struct PairingPresentation: Identifiable {
 }
 
 private struct PairingCodeSheet: View {
+    @Environment(\.dismiss) private var dismiss
     let code: String
 
     var body: some View {
@@ -580,7 +581,7 @@ private struct PairingCodeSheet: View {
             }.buttonStyle(.bordered)
             Label("Treat this code like a password. It grants access to this host.", systemImage: "lock.fill")
                 .font(.caption).foregroundStyle(.secondary).multilineTextAlignment(.center)
-            Button("Done") { NSApplication.shared.keyWindow?.close() }
+            Button("Done") { dismiss() }
                 .keyboardShortcut(.defaultAction)
         }
         .padding(28)
