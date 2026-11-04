@@ -1,19 +1,35 @@
 import AppKit
 import Combine
 import CoreImage.CIFilterBuiltins
+import Sparkle
 import SwiftUI
 
 @main struct HerdrWatchHostApp: App {
     @StateObject private var controller = HostController()
+    @StateObject private var updates = UpdateManager.shared
     @NSApplicationDelegateAdaptor(HostAppDelegate.self) private var appDelegate
 
     var body: some Scene {
         WindowGroup("HerdrWatch Host", id: "manager") {
-            HostManagerView().environmentObject(controller)
+            HostManagerView().environmentObject(controller).environmentObject(updates)
                 .frame(width: 380, height: 640)
                 .onAppear { appDelegate.install(controller: controller) }
         }
         .windowResizability(.contentSize)
+    }
+}
+
+@MainActor final class UpdateManager: ObservableObject {
+    static let shared = UpdateManager()
+
+    private let updaterController = SPUStandardUpdaterController(
+        startingUpdater: true,
+        updaterDelegate: nil,
+        userDriverDelegate: nil
+    )
+
+    func checkForUpdates() {
+        updaterController.checkForUpdates(nil)
     }
 }
 
@@ -37,6 +53,7 @@ import SwiftUI
         popover.contentSize = NSSize(width: 320, height: 250)
         popover.contentViewController = NSHostingController(
             rootView: HostMenuBarView().environmentObject(controller)
+                .environmentObject(UpdateManager.shared)
                 .frame(width: 320, height: 250)
         )
         self.popover = popover
@@ -334,6 +351,7 @@ private enum HostAppError: LocalizedError {
 
 private struct HostManagerView: View {
     @EnvironmentObject private var controller: HostController
+    @EnvironmentObject private var updates: UpdateManager
     @State private var confirmingReplace = false
     @State private var pairingPresentation: PairingPresentation?
 
@@ -353,6 +371,8 @@ private struct HostManagerView: View {
                 Divider()
                 HStack {
                     Button("Refresh status") { controller.refreshConfiguration() }
+                    Spacer()
+                    Button("Check for Updates…") { updates.checkForUpdates() }
                     Spacer()
                     Button("Quit") { NSApplication.shared.terminate(nil) }
                 }.buttonStyle(.borderless).font(.caption)
@@ -485,6 +505,7 @@ private struct HostManagerView: View {
 
 private struct HostMenuBarView: View {
     @EnvironmentObject private var controller: HostController
+    @EnvironmentObject private var updates: UpdateManager
     @Environment(\.openWindow) private var openWindow
 
     var body: some View {
@@ -523,6 +544,9 @@ private struct HostMenuBarView: View {
                 Button("Set up this Mac…") { openWindow(id: "manager") }
                     .buttonStyle(.borderedProminent).frame(maxWidth: .infinity)
             }
+
+            Button("Check for Updates…") { updates.checkForUpdates() }
+                .buttonStyle(.borderless).font(.caption)
         }
         .padding(14)
         .frame(width: 292)

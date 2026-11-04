@@ -26,6 +26,47 @@ jobs:
           xcodebuild -project HerdrWatch.xcodeproj -scheme HerdrWatchHost \
             -configuration Release -destination 'generic/platform=macOS' \
             -archivePath "$RUNNER_TEMP/HerdrWatchHost.xcarchive" archive \
+      - name: Sign and prepare the macOS update feed
+        env:
+          VERSION: ${{ github.ref_name }}
+          BUILD_NUMBER: ${{ github.run_number }}
+          SPARKLE_EDDSA_PRIVATE_KEY: ${{ secrets.SPARKLE_EDDSA_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          if [[ -z "$SPARKLE_EDDSA_PRIVATE_KEY" ]]; then
+            echo "SPARKLE_EDDSA_PRIVATE_KEY is required to publish signed Mac updates." >&2
+            exit 1
+          fi
+          mkdir -p "$RUNNER_TEMP/sparkle" release-assets
+          curl -fsSL https://github.com/sparkle-project/Sparkle/releases/download/2.10.1/Sparkle-2.10.1.tar.xz -o "$RUNNER_TEMP/Sparkle.tar.xz"
+          tar -xf "$RUNNER_TEMP/Sparkle.tar.xz" -C "$RUNNER_TEMP/sparkle"
+          app="$RUNNER_TEMP/HerdrWatchHost.xcarchive/Products/Applications/HerdrWatchHost.app"
+          ditto -c -k --sequesterRsrc --keepParent "$app" release-assets/HerdrWatch-Host-macos-universal.zip
+          version="${VERSION#v}"
+          published="$(date -u '+%a, %d %b %Y %H:%M:%S +0000')"
+          archive="release-assets/HerdrWatch-Host-macos-universal.zip"
+          signature="$(printf '%s' "$SPARKLE_EDDSA_PRIVATE_KEY" | "$RUNNER_TEMP/sparkle/bin/sign_update" --ed-key-file - -p "$archive")"
+          length="$(stat -f%z "$archive")"
+          cat > release-assets/appcast.xml <<EOF
+          <?xml version="1.0" encoding="utf-8"?>
+          <rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" xmlns:dc="http://purl.org/dc/elements/1.1/">
+            <channel>
+              <title>HerdrWatch Host</title>
+              <link>https://github.com/mberrishdev/herdr-watch/releases</link>
+              <description>HerdrWatch Host updates</description>
+              <language>en</language>
+              <item>
+                <title>HerdrWatch Host $version</title>
+                <sparkle:version>$BUILD_NUMBER</sparkle:version>
+                <sparkle:shortVersionString>$version</sparkle:shortVersionString>
+                <pubDate>$published</pubDate>
+                <description><![CDATA[A new HerdrWatch Host release is available.]]></description>
+                <enclosure url="https://github.com/mberrishdev/herdr-watch/releases/download/$VERSION/HerdrWatch-Host-macos-universal.zip" length="$length" type="application/octet-stream" sparkle:edSignature="$signature" />
+              </item>
+            </channel>
+          </rss>
+          EOF
+          printf '%s' "$SPARKLE_EDDSA_PRIVATE_KEY" | "$RUNNER_TEMP/sparkle/bin/sign_update" --ed-key-file - release-assets/appcast.xml
       - name: Create DMG installer
         env:
           VERSION: ${{ github.ref_name }}
@@ -35,7 +76,6 @@ jobs:
           ditto "$RUNNER_TEMP/HerdrWatchHost.xcarchive/Products/Applications/HerdrWatchHost.app" "$RUNNER_TEMP/dmg-root/HerdrWatchHost.app"
           ln -s /Applications "$RUNNER_TEMP/dmg-root/Applications"
           hdiutil create -volname "HerdrWatch Host $VERSION" -srcfolder "$RUNNER_TEMP/dmg-root" -ov -format UDZO "release-assets/HerdrWatch-Host-macos-universal.dmg"
-          ditto -c -k --sequesterRsrc --keepParent "$RUNNER_TEMP/HerdrWatchHost.xcarchive/Products/Applications/HerdrWatchHost.app" "release-assets/HerdrWatch-Host-macos-universal.zip"
       - uses: actions/upload-artifact@v4
         with:
           name: HerdrWatch-Host-macos-universal
@@ -92,11 +132,11 @@ jobs:
           if (-not $installer) { throw "Tauri did not produce an NSIS setup installer." }
           New-Item -ItemType Directory -Force release-assets | Out-Null
           Copy-Item $installer.FullName "release-assets/HerdrWatch-Host-windows-x64-setup.exe"
-          $updateArchive = Get-ChildItem "apps/desktop/src-tauri/target/release/bundle/nsis/*-setup.exe" | Select-Object -First 1
-          $signature = Get-ChildItem "apps/desktop/src-tauri/target/release/bundle/nsis/*-setup.exe.sig" | Select-Object -First 1
+          $updateArchive = Get-ChildItem "apps/desktop/src-tauri/target/release/bundle/nsis/*.nsis.zip" | Select-Object -First 1
+          $signature = Get-ChildItem "apps/desktop/src-tauri/target/release/bundle/nsis/*.nsis.zip.sig" | Select-Object -First 1
           if (-not $updateArchive -or -not $signature) { throw "Tauri updater artifacts were not produced." }
-          Copy-Item $updateArchive.FullName "release-assets/HerdrWatch-Host-windows-x64-setup.exe"
-          Copy-Item $signature.FullName "release-assets/HerdrWatch-Host-windows-x64-setup.exe.sig"
+          Copy-Item $updateArchive.FullName "release-assets/HerdrWatch-Host-windows-x64-update.nsis.zip"
+          Copy-Item $signature.FullName "release-assets/HerdrWatch-Host-windows-x64-update.nsis.zip.sig"
       - uses: actions/upload-artifact@v4
         with:
           name: HerdrWatch-Host-windows-x64
@@ -119,11 +159,11 @@ jobs:
         run: |
           set -euo pipefail
           version="${VERSION#v}"
-          signature="$(cat release-assets/HerdrWatch-Host-windows-x64-setup.exe.sig)"
+          signature="$(cat release-assets/HerdrWatch-Host-windows-x64-update.nsis.zip.sig)"
           jq -n \
             --arg version "$version" \
             --arg signature "$signature" \
-            --arg url "https://github.com/${REPOSITORY}/releases/download/${VERSION}/HerdrWatch-Host-windows-x64-setup.exe" \
+            --arg url "https://github.com/${REPOSITORY}/releases/download/${VERSION}/HerdrWatch-Host-windows-x64-update.nsis.zip" \
             '{version: $version, notes: "A new HerdrWatch Host release is available.", platforms: {"windows-x86_64": {signature: $signature, url: $url}}}' \
             > release-assets/latest.json
       - uses: softprops/action-gh-release@v3

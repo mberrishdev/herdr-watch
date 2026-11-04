@@ -11,6 +11,7 @@
 		01D5362CA674F6B505578EC3 /* HerdrWatchApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 38EB4E1FFC796C3B019C3E5E /* HerdrWatchApp.swift */; };
 		03613DA56F3BA0CE1AB45FA3 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = BA8CC928779370C56E944A9C /* Assets.xcassets */; };
 		09CD202C7680D00396671DF1 /* Security.swift in Sources */ = {isa = PBXBuildFile; fileRef = 45F19DB364F1A9DFE22CE13D /* Security.swift */; };
+		1ADC40FEE5AD8EB6BF1F182F /* Sparkle in Frameworks */ = {isa = PBXBuildFile; productRef = B9FF35394450AA17B7EE03A1 /* Sparkle */; };
 		1E3969C9829E9CF17E44C85E /* Crypto in Frameworks */ = {isa = PBXBuildFile; productRef = D4E6D5AAD1D397271776A1DA /* Crypto */; };
 		25FF3A7C274FD4D523CF1010 /* PairingScanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = 92DF5C9A6A6C57501551A2C8 /* PairingScanner.swift */; };
 		2843E9CAEFE379951F299A85 /* PreviewFixture.swift in Sources */ = {isa = PBXBuildFile; fileRef = 674AE5E99BE2D4BBD3901AB0 /* PreviewFixture.swift */; };
@@ -54,6 +55,7 @@
 
 /* Begin PBXFileReference section */
 		1345C5410DB212432EB34D4A /* CoreAdapter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoreAdapter.swift; sourceTree = "<group>"; };
+		15E3D7AF0C48AA3371EF078C /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		38EB4E1FFC796C3B019C3E5E /* HerdrWatchApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HerdrWatchApp.swift; sourceTree = "<group>"; };
 		45F19DB364F1A9DFE22CE13D /* Security.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Security.swift; sourceTree = "<group>"; };
 		4DF63D4D9ED6502481C6D03C /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
@@ -82,6 +84,14 @@
 				E16D542CA39C66E99FBADFEF /* NIOSSH in Frameworks */,
 				5B294A1D0779DCAB95064EC7 /* NIO in Frameworks */,
 				2F2CCAE0AF3724E89250FF29 /* Crypto in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		0571437BB87B20F739F9ED00 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				1ADC40FEE5AD8EB6BF1F182F /* Sparkle in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -134,6 +144,7 @@
 			children = (
 				4DF63D4D9ED6502481C6D03C /* Assets.xcassets */,
 				7E147C6EDC9141F607B3E6FA /* HerdrWatchHostApp.swift */,
+				15E3D7AF0C48AA3371EF078C /* Info.plist */,
 			);
 			name = HerdrWatchHost;
 			path = "apps/macos-host/HerdrWatchHost";
@@ -231,6 +242,7 @@
 			buildPhases = (
 				9778CFC316BE7978822A369E /* Sources */,
 				FC5AA9CC90236AD5A224703D /* Resources */,
+				0571437BB87B20F739F9ED00 /* Frameworks */,
 				EA5025DB33CCE0DC2EC10E6E /* Build universal Go host companion */,
 			);
 			buildRules = (
@@ -239,6 +251,7 @@
 			);
 			name = HerdrWatchHost;
 			packageProductDependencies = (
+				B9FF35394450AA17B7EE03A1 /* Sparkle */,
 			);
 			productName = HerdrWatchHost;
 			productReference = 9A760BC3E9C2748CDC9870C2 /* HerdrWatchHost.app */;
@@ -273,6 +286,7 @@
 				7D074C6552D5E3AC56F4FF94 /* XCRemoteSwiftPackageReference "swift-crypto" */,
 				549598854CA62659C2C5B841 /* XCRemoteSwiftPackageReference "swift-nio" */,
 				A0C085B3BB9EC4BED0D2F95A /* XCRemoteSwiftPackageReference "swift-nio-ssh" */,
+				0C80447FC8EF2E4CB5C3DF29 /* XCRemoteSwiftPackageReference "Sparkle" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 68ED6B32BD459C2FDDBCFBD6 /* Products */;
@@ -404,7 +418,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGNING_ALLOWED = NO;
 				COMBINE_HIDPI_IMAGES = YES;
-				INFOPLIST_KEY_LSUIElement = YES;
+				INFOPLIST_FILE = "apps/macos-host/HerdrWatchHost/Info.plist";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
@@ -559,7 +573,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGNING_ALLOWED = NO;
 				COMBINE_HIDPI_IMAGES = YES;
-				INFOPLIST_KEY_LSUIElement = YES;
+				INFOPLIST_FILE = "apps/macos-host/HerdrWatchHost/Info.plist";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
@@ -702,6 +716,14 @@
 /* End XCConfigurationList section */
 
 /* Begin XCRemoteSwiftPackageReference section */
+		0C80447FC8EF2E4CB5C3DF29 /* XCRemoteSwiftPackageReference "Sparkle" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/sparkle-project/Sparkle.git";
+			requirement = {
+				kind = exactVersion;
+				version = 2.10.1;
+			};
+		};
 		549598854CA62659C2C5B841 /* XCRemoteSwiftPackageReference "swift-nio" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/apple/swift-nio.git";
@@ -766,6 +788,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = A0C085B3BB9EC4BED0D2F95A /* XCRemoteSwiftPackageReference "swift-nio-ssh" */;
 			productName = NIOSSH;
+		};
+		B9FF35394450AA17B7EE03A1 /* Sparkle */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 0C80447FC8EF2E4CB5C3DF29 /* XCRemoteSwiftPackageReference "Sparkle" */;
+			productName = Sparkle;
 		};
 		D4E6D5AAD1D397271776A1DA /* Crypto */ = {
 			isa = XCSwiftPackageProductDependency;

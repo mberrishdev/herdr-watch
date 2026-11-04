@@ -7,21 +7,30 @@ macOS; the native SwiftUI menu-bar manager remains available for Mac users.
 
 ## Automatic updates
 
-The Windows Tauri manager checks the latest GitHub release when it starts and
-installs signed updates from `latest.json`. Release builds require the
+The Windows Tauri manager checks GitHub Releases at startup, when it returns
+to the foreground, and every four hours. It shows an update banner and installs
+the signed NSIS update package after you choose **Install**. Release builds require the
 `TAURI_SIGNING_PRIVATE_KEY`, `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`, and
 `TAURI_SIGNING_PUBLIC_KEY` GitHub Actions secrets.
 
-The native macOS host currently ships as an unsigned DMG. macOS automatic
-updates require an Apple Developer ID certificate and a Sparkle signing key,
-so updates must be installed manually from the latest GitHub release.
+The native macOS host uses Sparkle to check for updates automatically and
+shows its standard install prompt when a signed update is available. You can
+also choose **Check for Updates…** in the host manager or menu bar popover.
+Updates are signed with Sparkle EdDSA and the feed and archive signatures are
+verified before installation. Automatic installation is off; you choose when
+to install an offered update.
 
 The release workflow requires these GitHub Actions secrets:
 
 - Windows/Tauri: `TAURI_SIGNING_PRIVATE_KEY`, `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`,
   and `TAURI_SIGNING_PUBLIC_KEY`.
-- macOS requires no signing secrets. macOS releases are unsigned and may show
-  a Gatekeeper warning on first launch.
+- macOS: `SPARKLE_EDDSA_PRIVATE_KEY`. The matching public key is embedded in
+  the native host app. The Mac app is still not Apple code-signed or notarized,
+  so Gatekeeper may show a warning on first launch.
+
+The already published macOS v0.1.0 app does not contain Sparkle. Install a
+later DMG manually once; that version can then update itself from future GitHub
+releases.
 
 ## Windows host requirements
 

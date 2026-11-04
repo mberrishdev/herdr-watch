@@ -20,6 +20,8 @@ let activity = ["Host manager started."];
 let unlisten: UnlistenFn | undefined;
 let updateMessage = "";
 let updateAvailable = false;
+let updateChecking = false;
+let updateStatus = "";
 let sshReadiness: SshReadiness | null = null;
 let sshBusy = false;
 const isWindows = navigator.userAgent.includes("Windows");
@@ -84,7 +86,7 @@ function render() {
         <div class="status-actions">${viewState === "ready" || viewState === "connected" || viewState === "connecting" ? `<button class="secondary danger" id="stop">Stop relay</button>` : `<button class="primary" id="start" ${busy || viewState === "setup" || (isWindows && (!sshReadiness || !sshReadiness.openSshInstalled || !sshReadiness.sshdRunning || !sshReadiness.firewallReady || !sshReadiness.herdrAvailable)) ? "disabled" : ""}>Start relay</button>`}<button class="quiet" id="refresh">Refresh status</button></div>
       </section>
       <details class="activity"><summary><span>Recent activity</span><span class="activity-count">${activity.length}</span></summary><div class="activity-lines">${activity.slice(-6).reverse().map((line) => `<div><i></i>${esc(line)}</div>`).join("")}</div></details>
-      <footer><span>🔒 SSH stays encrypted between this computer and your iPhone.</span><span>Credentials stay on this device.</span></footer>
+      <footer><span>🔒 SSH stays encrypted between this computer and your iPhone.</span><div class="footer-actions"><span>Credentials stay on this device.</span><button class="text-button" id="check-updates" ${updateChecking ? "disabled" : ""}>${updateChecking ? "Checking…" : "Check for updates"}</button></div>${updateStatus ? `<span class="update-status">${esc(updateStatus)}</span>` : ""}</footer>
     </main>`;
 
   const endpointInput = document.querySelector<HTMLInputElement>("#endpoint");
@@ -99,21 +101,39 @@ function render() {
   document.querySelector("#done-pairing")?.addEventListener("click", async () => { hidePairing(); await startRelay(); });
   document.querySelector("#clear-error")?.addEventListener("click", () => { errorMessage = ""; render(); });
   document.querySelector("#install-update")?.addEventListener("click", installUpdate);
+  document.querySelector("#check-updates")?.addEventListener("click", () => checkForUpdates(true));
   document.querySelector("#check-ssh")?.addEventListener("click", checkSshReadiness);
   const canvas = document.querySelector<HTMLCanvasElement>("#qr");
   if (canvas && pairingCode) QRCode.toCanvas(canvas, pairingCode, { width: 200, margin: 1, color: { dark: "#15233c", light: "#ffffff" }, errorCorrectionLevel: "M" });
 }
 
-async function checkForUpdates() {
+async function checkForUpdates(showResult = false) {
+  if (updateChecking || (updateAvailable && !showResult)) return;
+  updateChecking = true;
+  let shouldRender = showResult;
+  if (showResult) { updateStatus = "Checking GitHub releases…"; render(); }
   try {
     const update = await check();
     if (update) {
       updateAvailable = true;
       updateMessage = `HerdrWatch ${update.version} is available.`;
+      updateStatus = "";
+      shouldRender = true;
+    } else if (showResult) {
+      updateAvailable = false;
+      updateStatus = "You’re up to date.";
       render();
     }
   } catch (error) {
     activity.push(`Update check failed: ${String(error)}`);
+    if (showResult) {
+      updateAvailable = false;
+      updateStatus = "Could not check for updates. Try again later.";
+      render();
+    }
+  } finally {
+    updateChecking = false;
+    if (shouldRender) render();
   }
 }
 
@@ -194,6 +214,8 @@ render();
 void refreshStatus();
 void checkSshReadiness();
 void checkForUpdates();
+window.setInterval(() => void checkForUpdates(), 4 * 60 * 60 * 1000);
+window.addEventListener("focus", () => void checkForUpdates());
 void listen<string>("relay-event", ({ payload }) => {
   const separator = payload.indexOf(":");
   const kind = payload.slice(0, separator);

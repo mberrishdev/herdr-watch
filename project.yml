@@ -17,6 +17,9 @@ packages:
   Crypto:
     url: https://github.com/apple/swift-crypto.git
     from: 3.12.3
+  Sparkle:
+    url: https://github.com/sparkle-project/Sparkle.git
+    exactVersion: 2.10.1
 settings:
   base:
     SWIFT_VERSION: '5.0'
@@ -55,9 +58,21 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: dev.herdr.HerdrWatchHost
-        INFOPLIST_KEY_LSUIElement: YES
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         CODE_SIGNING_ALLOWED: NO
+    dependencies:
+      - package: Sparkle
+    info:
+      path: apps/macos-host/HerdrWatchHost/Info.plist
+      properties:
+        LSUIElement: YES
+        NSLocalNetworkUsageDescription: Connect securely to your paired HerdrWatch host.
+        SUFeedURL: https://github.com/mberrishdev/herdr-watch/releases/latest/download/appcast.xml
+        SUPublicEDKey: HuWKq3DiGDfR66mZ/QGsIGsj8qcodwIpwzVf8C34Bt4=
+        SUEnableAutomaticChecks: YES
+        SUAutomaticallyUpdate: NO
+        SUVerifyUpdateBeforeExtraction: YES
+        SURequireSignedFeed: YES
     postBuildScripts:
       - name: Build universal Go host companion
         basedOnDependencyAnalysis: false
