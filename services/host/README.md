@@ -2,7 +2,7 @@
 
 The host companion is a Go CLI for macOS and Windows. The recommended shared-relay mode connects outbound to the HerdrWatch Worker and does not require users to have a Cloudflare account. An older Cloudflare One mode is also retained: it creates a remotely managed Tunnel and private route, then runs `cloudflared` in the foreground.
 
-In shared-relay mode, the iPhone's Citadel client still performs SSH end to end. The relay forwards opaque WebSocket binary data and cannot read the SSH payload. The shared Worker deployment can observe connection metadata such as relay ID, timing, and traffic volume. The host companion connects to `127.0.0.1:22`; it does not open an inbound router port.
+On macOS, shared-relay mode forwards the iPhone's end-to-end encrypted SSH stream to `127.0.0.1:22`; the host does not open an inbound router port. On Windows, pairing uses protocol v2: the phone and companion encrypt fixed Herdr API requests and responses with AES-GCM using a key derived from the one-time pairing secret. The relay forwards ciphertext and can observe relay ID, timing, and traffic volume. The companion runs Herdr locally as the signed-in user and does not accept remote shell commands.
 
 See the root [README](../../README.md#shared-relay-no-vpn-app-on-iphone) for the shared-relay deployment and pairing flow.
 
@@ -79,8 +79,8 @@ HerdrWatch cannot embed Cloudflare One's iOS VPN profile. The official Cloudflar
 - Herdr must be installed and running for the same user account that runs the companion.
 - The host needs a stable private IPv4 address. A DHCP reservation is recommended.
 - macOS includes OpenSSH; enable **System Settings → General → Sharing → Remote Login**.
-- Windows requires the optional **OpenSSH Server** feature installed and running. The companion does not install it.
-- Windows Herdr runtime and IPC support still require validation before claiming full platform parity.
+- Windows does not require OpenSSH Server. Herdr must be installed for the signed-in account and available as `herdr` on PATH.
+- The Windows direct Herdr bridge supports upstream `herdr remote-api-bridge` operations through a restricted method allowlist. It should be validated with the Herdr versions intended for release.
 
 ## Build
 

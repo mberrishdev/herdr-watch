@@ -13,6 +13,7 @@ import Darwin
     private var client: SSHClient?
     private var generation = UUID()
     private let relayBridge = RelayBridge()
+    private var usesDirectRelay = false
     private let passwordProvider: (Host) throws -> String
     init(passwordProvider: ((Host) throws -> String)? = nil) {
         self.passwordProvider = passwordProvider ?? { host in
@@ -24,8 +25,20 @@ import Darwin
     }
     func connect(host: Host, trustedKey: String?, progress: @escaping @MainActor (String) -> Void) async throws {
         try host.validate()
-        let authentication = SSHAuthenticationMethod.passwordBased(username: host.username, password: try passwordProvider(host))
         let attempt = generation
+        if host.usesRelay, host.relayProtocol == 2 {
+            guard let endpoint = host.relayEndpoint, let hostID = host.relayHostID,
+                  let secretData = try Vault.read(host.relaySecretAccount), let secret = String(data: secretData, encoding: .utf8),
+                  let tokenData = try Vault.read(host.relayTokenAccount), let token = String(data: tokenData, encoding: .utf8) else {
+                throw WatchError.message("Relay pairing is missing. Scan the Windows Host QR code again.")
+            }
+            progress("Opening encrypted connection to the Windows companion…")
+            try await relayBridge.openDirect(endpoint: endpoint, hostID: hostID, authToken: token, secret: secret)
+            guard attempt == generation else { relayBridge.close(); throw CancellationError() }
+            usesDirectRelay = true
+            return
+        }
+        let authentication = SSHAuthenticationMethod.passwordBased(username: host.username, password: try passwordProvider(host))
         var sshHost = host.address
         var sshPort = host.port
         if host.usesRelay {
@@ -52,6 +65,10 @@ import Darwin
         client = connection
     }
     func execute(_ operation: ReadOperation) async throws -> Data {
+        if usesDirectRelay {
+            let request = operation.directRelayRequest
+            return try await relayBridge.executeDirect(kind: request.kind, sessionName: request.session, payload: request.payload)
+        }
         guard let client else { throw WatchError.message("Connect to your host first.") }
         let command = try operation.command
         var result = Data()
@@ -110,7 +127,7 @@ import Darwin
         if timedOut { throw WatchError.message("Herdr command timed out after 15 seconds. SSH login succeeded; check the host's non-interactive shell and Herdr command.") }
         return result
     }
-    func disconnect() async { generation = UUID(); let old = client; client = nil; relayBridge.close(); try? await old?.close() }
+    func disconnect() async { generation = UUID(); usesDirectRelay = false; let old = client; client = nil; relayBridge.close(); try? await old?.close() }
 }
 
 enum ConnectionStage: String {

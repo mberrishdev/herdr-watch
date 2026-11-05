@@ -6,7 +6,7 @@ import { relaunch } from "@tauri-apps/plugin-process";
 import "./style.css";
 
 type Status = { configured: boolean; endpoint?: string };
-type SshReadiness = { openSshInstalled: boolean; sshdRunning: boolean; firewallReady: boolean; herdrAvailable: boolean };
+type HerdrReadiness = { herdrAvailable: boolean };
 type ViewState = "setup" | "stopped" | "connecting" | "ready" | "connected" | "error";
 
 const endpointDefault = "wss://herdrwatch-relay.herdrwatch-relay.workers.dev";
@@ -22,8 +22,8 @@ let updateMessage = "";
 let updateAvailable = false;
 let updateChecking = false;
 let updateStatus = "";
-let sshReadiness: SshReadiness | null = null;
-let sshBusy = false;
+let herdrReadiness: HerdrReadiness | null = null;
+let herdrBusy = false;
 const isWindows = navigator.userAgent.includes("Windows");
 
 function esc(value: string) {
@@ -35,25 +35,19 @@ function titleForState() {
 }
 function descriptionForState() {
   return ({
-    setup: "Pair this computer once. Your iPhone will use the same encrypted SSH flow as before.",
+    setup: isWindows ? "Pair this computer once. The Windows companion connects to Herdr locally over an encrypted relay." : "Pair this computer once. Your iPhone will use the encrypted SSH connection through the relay.",
     stopped: "The host is paired. Start the relay when you want to connect from HerdrWatch.",
     connecting: "The host is reaching HerdrWatch’s relay. This window can stay open in the background.",
     ready: "The encrypted relay is online and waiting for your iPhone.",
-    connected: "Your iPhone reached this computer. SSH and agent traffic stay encrypted end to end.",
+    connected: isWindows ? "Your iPhone reached this computer. Herdr requests are encrypted end to end." : "Your iPhone reached this computer. SSH and agent traffic stay encrypted end to end.",
     error: errorMessage || "The companion could not start. Check the relay setup and try again.",
   } as const)[viewState];
 }
 
 function renderWindowsSetup() {
   if (!isWindows) return "";
-  const checks = [
-    ["OpenSSH Server", sshReadiness?.openSshInstalled, "Install it from Windows Settings → Optional features."],
-    ["SSH service", sshReadiness?.sshdRunning, "Start the `sshd` service in an administrator PowerShell."],
-    ["Windows Firewall", sshReadiness?.firewallReady, "Allow the OpenSSH Server rule through Windows Firewall."],
-    ["Herdr", sshReadiness?.herdrAvailable, "Install Herdr for this Windows user and ensure it is on PATH."],
-  ] as const;
-  const ready = sshReadiness && checks.every(([, passed]) => passed);
-  return `<section class="card setup-card"><div class="status-header"><div><span class="section-kicker">WINDOWS READINESS</span><h2>${ready ? "Ready to connect" : "Finish Windows setup"}</h2></div><button class="quiet" id="check-ssh" ${sshBusy ? "disabled" : ""}>${sshBusy ? "Checking…" : "Check again"}</button></div><p class="setup-intro">HerdrWatch needs local SSH access before the encrypted relay can start.</p><div class="check-list">${checks.map(([name, passed, help]) => `<div class="check-row ${passed ? "passed" : ""}"><span class="check-icon">${passed ? "✓" : "!"}</span><div><b>${name}</b><span>${passed ? "Configured" : esc(help)}</span></div></div>`).join("")}</div></section>`;
+  const passed = herdrReadiness?.herdrAvailable;
+  return `<section class="card setup-card"><div class="status-header"><div><span class="section-kicker">WINDOWS READINESS</span><h2>${passed ? "Ready to connect" : "Check Herdr"}</h2></div><button class="quiet" id="check-herdr" ${herdrBusy ? "disabled" : ""}>${herdrBusy ? "Checking…" : "Check again"}</button></div><p class="setup-intro">HerdrWatch talks to the Herdr app running in your Windows account. SSH, an inbound port, and a firewall rule are not required.</p><div class="check-list"><div class="check-row ${passed ? "passed" : ""}"><span class="check-icon">${passed ? "✓" : "!"}</span><div><b>Herdr local bridge</b><span>${passed ? "Available" : "Install or start Herdr, then ensure `herdr` is on this account’s PATH."}</span></div></div></div></section>`;
 }
 
 function render() {
@@ -83,10 +77,10 @@ function render() {
       <section class="card status-card">
         <div class="status-header"><div><span class="section-kicker">HOST STATUS</span><h2>${viewState === "connected" ? "Your iPhone can reach this host" : "Encrypted relay"}</h2></div><span class="status-badge ${viewState}"><i></i>${viewState === "setup" ? "NOT PAIRED" : viewState.toUpperCase()}</span></div>
         <div class="status-detail"><div class="status-icon">${viewState === "connected" ? "↔" : "⌁"}</div><div><b>${viewState === "setup" ? "Not connected yet" : viewState === "connected" ? "iPhone connected" : "HerdrWatch relay"}</b><span>${viewState === "setup" ? "Create a pairing code to begin" : esc(endpoint.replace(/^wss:\/\//, ""))}</span></div></div>
-        <div class="status-actions">${viewState === "ready" || viewState === "connected" || viewState === "connecting" ? `<button class="secondary danger" id="stop">Stop relay</button>` : `<button class="primary" id="start" ${busy || viewState === "setup" || (isWindows && (!sshReadiness || !sshReadiness.openSshInstalled || !sshReadiness.sshdRunning || !sshReadiness.firewallReady || !sshReadiness.herdrAvailable)) ? "disabled" : ""}>Start relay</button>`}<button class="quiet" id="refresh">Refresh status</button></div>
+        <div class="status-actions">${viewState === "ready" || viewState === "connected" || viewState === "connecting" ? `<button class="secondary danger" id="stop">Stop relay</button>` : `<button class="primary" id="start" ${busy || viewState === "setup" || (isWindows && (!herdrReadiness || !herdrReadiness.herdrAvailable)) ? "disabled" : ""}>Start relay</button>`}<button class="quiet" id="refresh">Refresh status</button></div>
       </section>
       <details class="activity"><summary><span>Recent activity</span><span class="activity-count">${activity.length}</span></summary><div class="activity-lines">${activity.slice(-6).reverse().map((line) => `<div><i></i>${esc(line)}</div>`).join("")}</div></details>
-      <footer><span>🔒 SSH stays encrypted between this computer and your iPhone.</span><div class="footer-actions"><span>Credentials stay on this device.</span><button class="text-button" id="check-updates" ${updateChecking ? "disabled" : ""}>${updateChecking ? "Checking…" : "Check for updates"}</button></div>${updateStatus ? `<span class="update-status">${esc(updateStatus)}</span>` : ""}</footer>
+      <footer><span>🔒 ${isWindows ? "Herdr requests stay encrypted between this computer and your iPhone." : "SSH stays encrypted between this computer and your iPhone."}</span><div class="footer-actions"><span>Credentials stay on this device.</span><button class="text-button" id="check-updates" ${updateChecking ? "disabled" : ""}>${updateChecking ? "Checking…" : "Check for updates"}</button></div>${updateStatus ? `<span class="update-status">${esc(updateStatus)}</span>` : ""}</footer>
     </main>`;
 
   const endpointInput = document.querySelector<HTMLInputElement>("#endpoint");
@@ -102,7 +96,7 @@ function render() {
   document.querySelector("#clear-error")?.addEventListener("click", () => { errorMessage = ""; render(); });
   document.querySelector("#install-update")?.addEventListener("click", installUpdate);
   document.querySelector("#check-updates")?.addEventListener("click", () => checkForUpdates(true));
-  document.querySelector("#check-ssh")?.addEventListener("click", checkSshReadiness);
+  document.querySelector("#check-herdr")?.addEventListener("click", checkHerdrReadiness);
   const canvas = document.querySelector<HTMLCanvasElement>("#qr");
   if (canvas && pairingCode) QRCode.toCanvas(canvas, pairingCode, { width: 200, margin: 1, color: { dark: "#15233c", light: "#ffffff" }, errorCorrectionLevel: "M" });
 }
@@ -156,17 +150,17 @@ async function installUpdate() {
   }
 }
 
-async function checkSshReadiness() {
+async function checkHerdrReadiness() {
   if (!isWindows) return;
-  sshBusy = true;
+  herdrBusy = true;
   render();
   try {
-    sshReadiness = await invoke<SshReadiness>("ssh_readiness");
-    addActivity("Checked Windows SSH readiness.");
+    herdrReadiness = await invoke<HerdrReadiness>("herdr_readiness");
+    addActivity("Checked the Windows Herdr bridge.");
   } catch (error) {
-    errorMessage = `Windows readiness check failed: ${String(error)}`;
+    errorMessage = `Herdr readiness check failed: ${String(error)}`;
   } finally {
-    sshBusy = false;
+    herdrBusy = false;
     render();
   }
 }
@@ -212,7 +206,7 @@ function addActivity(line: string) { activity.push(line); if (activity.length > 
 
 render();
 void refreshStatus();
-void checkSshReadiness();
+void checkHerdrReadiness();
 void checkForUpdates();
 window.setInterval(() => void checkForUpdates(), 4 * 60 * 60 * 1000);
 window.addEventListener("focus", () => void checkForUpdates());

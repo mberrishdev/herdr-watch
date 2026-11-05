@@ -6,14 +6,18 @@ struct Host: Codable, Equatable {
     var username = ""
     var relayEndpoint: String?
     var relayHostID: String?
+    var relayProtocol: Int?
     var passwordAccount: String { "password:\(identity):\(username)" }
     var relaySecretAccount: String { "relay:\(identity)" }
+    var relayTokenAccount: String { "relay-token:\(identity)" }
     var usesRelay: Bool { relayEndpoint != nil && relayHostID != nil }
     var isConfigured: Bool { usesRelay || !address.isEmpty }
     var identity: String { usesRelay ? "relay:\(relayHostID ?? "")" : "\(address.lowercased()):\(port)" }
     func validate() throws {
+        let needsSSHCredentials = !usesRelay || relayProtocol != 2
         let addressValid = usesRelay || (!address.isEmpty && address.count <= 253 && !address.contains("\0") && !address.contains(where: { $0.isWhitespace || $0.isNewline }))
-        guard addressValid, !username.contains("\0"), username.count <= 128, !username.contains(where: { $0.isWhitespace }), !username.isEmpty, (1...65535).contains(port) else { throw WatchError.message("Enter a host, SSH username and port 1–65535.") }
+        let credentialsValid = !needsSSHCredentials || (!username.contains("\0") && username.count <= 128 && !username.contains(where: { $0.isWhitespace }) && !username.isEmpty)
+        guard addressValid, credentialsValid, (1...65535).contains(port) else { throw WatchError.message("Enter a host, SSH username and port 1–65535.") }
         if usesRelay {
             guard let relayEndpoint, relayEndpoint.count <= 512,
                   let url = URL(string: relayEndpoint), url.scheme == "wss", url.host != nil,
@@ -57,15 +61,20 @@ struct RelayPairing: Decodable {
     let endpoint: String
     let host_id: String
     let secret: String
+    let token: String?
     static func decode(_ value: String) throws -> RelayPairing {
         let normalized = value.trimmingCharacters(in: .whitespacesAndNewlines).replacingOccurrences(of: "-", with: "+").replacingOccurrences(of: "_", with: "/")
         guard let data = Data(base64Encoded: normalized + String(repeating: "=", count: (4 - normalized.count % 4) % 4)) else { throw WatchError.message("That pairing code is not valid. Copy the full code from the host companion.") }
         let pairing = try JSONDecoder().decode(RelayPairing.self, from: data)
-        guard pairing.version == 1, pairing.endpoint.count <= 512,
+        guard (pairing.version == 1 || pairing.version == 2), pairing.endpoint.count <= 512,
               let endpoint = URL(string: pairing.endpoint), endpoint.scheme == "wss", endpoint.host != nil,
               endpoint.user == nil, endpoint.password == nil, endpoint.query == nil, endpoint.fragment == nil,
               pairing.host_id.range(of: "^[A-Za-z0-9_-]{16,64}$", options: .regularExpression) != nil,
-              Data(base64Encoded: pairing.secret.replacingOccurrences(of: "-", with: "+").replacingOccurrences(of: "_", with: "/") + String(repeating: "=", count: (4 - pairing.secret.count % 4) % 4))?.count == 32 else {
+              Data(base64Encoded: pairing.secret.replacingOccurrences(of: "-", with: "+").replacingOccurrences(of: "_", with: "/") + String(repeating: "=", count: (4 - pairing.secret.count % 4) % 4))?.count == 32,
+              pairing.version == 1 || pairing.token.flatMap({ token in
+                  let normalized = token.replacingOccurrences(of: "-", with: "+").replacingOccurrences(of: "_", with: "/")
+                  return Data(base64Encoded: normalized + String(repeating: "=", count: (4 - normalized.count % 4) % 4))?.count
+              }) == 32 else {
             throw WatchError.message("That pairing code is incomplete or unsupported.")
         }
         return pairing
@@ -138,6 +147,15 @@ enum ReadOperation {
     case sessions, probe, snapshot(Session)
     case coreOutput(String), agentOutput(Session, String)
     case corePrompt(String, String, String?), agentPrompt(Session, String, String)
+    var directRelayRequest: (kind: String, session: String?, payload: Data?) {
+        switch self {
+        case .runtime, .probe: return ("runtime", nil, nil)
+        case .sessions: return ("sessions", nil, nil)
+        case .snapshot(let session): return ("api", session.name, stdin)
+        case .agentOutput(let session, _), .agentPrompt(let session, _, _): return ("api", session.name, stdin)
+        case .coreHello, .coreTerminals, .coreLayout, .coreOutput, .corePrompt: return ("api", "default", stdin)
+        }
+    }
     static let pathSetup = "PATH=\"$HOME/.local/bin:/opt/homebrew/bin:/usr/local/bin:$PATH\"; export PATH; "
     static let coreCommand = pathSetup + "if [ ! -S \"${XDG_STATE_HOME:-$HOME/.local/state}/herdr-core/default/default.sock\" ]; then exit 69; fi; exec herdr-core connect --session default"
     var command: String {

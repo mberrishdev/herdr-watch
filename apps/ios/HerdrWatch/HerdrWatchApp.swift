@@ -221,7 +221,7 @@ struct Dashboard: View {
                     .frame(width: 44, height: 44).background((store.connected ? Color.green : Color.secondary).opacity(0.13), in: RoundedRectangle(cornerRadius: 15))
                 VStack(alignment: .leading, spacing: 4) {
                     Text(store.activeConnection?.title ?? (store.connected ? "Connected" : "Your Herdr host")).font(.headline)
-                    Text(store.host.usesRelay ? "\(store.host.username) · Encrypted relay" : store.host.address.isEmpty ? "Add a connection to get started" : "\(store.host.username)@\(store.host.address) · SSH \(store.host.port)")
+                    Text(store.host.usesRelay ? (store.host.relayProtocol == 2 ? "Windows companion · Encrypted relay" : "\(store.host.username) · Encrypted SSH relay") : store.host.address.isEmpty ? "Add a connection to get started" : "\(store.host.username)@\(store.host.address) · SSH \(store.host.port)")
                         .font(.subheadline).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle)
                 }
                 Spacer(minLength: 0)
@@ -429,6 +429,10 @@ struct HostSettings: View {
     @State private var scannerPresented = false
     @State private var hasSavedPassword: Bool?
     private var pairingCodeIsValid: Bool { (try? RelayPairing.decode(pairingCode)) != nil }
+    private var usingDirectRelay: Bool {
+        if let incoming = try? RelayPairing.decode(pairingCode) { return incoming.version == 2 }
+        return pairingCode.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && host.relayProtocol == 2
+    }
     var body: some View {
         ZStack {
                 GlassBackdrop()
@@ -483,7 +487,7 @@ struct HostSettings: View {
                                     .textInputAutocapitalization(.never).autocorrectionDisabled()
                                     #endif
                                     .padding(13).background(Color.primary.opacity(0.045), in: RoundedRectangle(cornerRadius: 13))
-                                Text("After pairing, the host companion must stay running. No Cloudflare One or VPN app is needed.")
+                                Text(usingDirectRelay ? "No SSH account or password is needed. Keep HerdrWatch Host open on Windows." : "After pairing, the host companion must stay running. No Cloudflare One or VPN app is needed.")
                                     .font(.caption).foregroundStyle(.secondary)
                             }
                             DisclosureGroup("Direct SSH (private network only)") {
@@ -499,6 +503,7 @@ struct HostSettings: View {
                                 }
                             }.font(.subheadline.weight(.medium))
                         }.padding(17).glassPanel(cornerRadius: 24)
+                        if !usingDirectRelay {
                         VStack(alignment: .leading, spacing: 13) {
                             cardHeading("SSH login", subtitle: "Your Mac account and SSH password. Enable Remote Login on the Mac.", symbol: "network")
                             VStack(spacing: 9) {
@@ -544,6 +549,7 @@ struct HostSettings: View {
                         VStack(alignment: .leading, spacing: 10) {
                             cardHeading("Verify before connecting", subtitle: "On first connection, compare the server fingerprint with a trusted source. Your password is withheld until you trust it.", symbol: "checkmark.shield")
                         }.padding(17).glassPanel(cornerRadius: 24)
+                        }
                         if connection?.id == store.library.activeID, connection != nil {
                         DisclosureGroup("Advanced local data") {
                             VStack(alignment: .leading, spacing: 12) {
@@ -605,16 +611,27 @@ struct HostSettings: View {
         guard let number = Int(port) else { store.message = "Enter a numeric port."; return }
         host.port = number
         do {
+            let previousRelayAccount = store.host.usesRelay ? store.host.relaySecretAccount : nil
+            let previousRelayTokenAccount = store.host.usesRelay ? store.host.relayTokenAccount : nil
+            let replacingPairing = !pairingCode.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             var incomingRelaySecret: String?
+            var incomingRelayToken: String?
             if !pairingCode.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 let pairing = try RelayPairing.decode(pairingCode)
                 host.address = ""
                 host.relayEndpoint = pairing.endpoint
                 host.relayHostID = pairing.host_id
+                host.relayProtocol = pairing.version
                 incomingRelaySecret = pairing.secret
+                incomingRelayToken = pairing.token
             }
             try host.validate()
             if let incomingRelaySecret { try Vault.save(Data(incomingRelaySecret.utf8), account: host.relaySecretAccount) }
+            if let incomingRelayToken { try Vault.save(Data(incomingRelayToken.utf8), account: host.relayTokenAccount) }
+            if let previousRelayAccount, previousRelayAccount != host.relaySecretAccount { try Vault.delete(previousRelayAccount) }
+            if let previousRelayTokenAccount, previousRelayTokenAccount != host.relayTokenAccount || (replacingPairing && incomingRelayToken == nil) {
+                try Vault.delete(previousRelayTokenAccount)
+            }
             if !password.isEmpty { try Vault.save(Data(password.utf8), account: host.passwordAccount) }
             pairingCode = ""
             password = ""

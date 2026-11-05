@@ -1,7 +1,12 @@
 package main
 
 import (
+	"bytes"
+	"context"
+	"crypto/aes"
+	"crypto/cipher"
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -12,6 +17,9 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"os/exec"
+	"regexp"
+	"runtime"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -24,16 +32,19 @@ import (
 
 const relayConfigKey = "shared-relay-config"
 const relaySecretKey = "shared-relay-secret"
+const relayAuthTokenKey = "shared-relay-auth-token"
 
 type relayConfig struct {
 	Endpoint string `json:"endpoint"`
 	HostID   string `json:"host_id"`
+	Protocol int    `json:"protocol,omitempty"`
 }
 type pairingCode struct {
 	Version  int    `json:"version"`
 	Endpoint string `json:"endpoint"`
 	HostID   string `json:"host_id"`
 	Secret   string `json:"secret"`
+	Token    string `json:"token,omitempty"`
 }
 
 func relayCommand(args []string) error {
@@ -75,22 +86,38 @@ func initRelay(endpoint string, jsonOutput bool) error {
 	if err != nil || u.Scheme != "wss" || u.Host == "" || u.User != nil || u.RawQuery != "" || u.Fragment != "" {
 		return errors.New("enter the shared relay's wss:// endpoint")
 	}
-	var hostIDBytes, secretBytes [32]byte
+	var hostIDBytes, secretBytes, tokenBytes [32]byte
 	if _, err := rand.Read(hostIDBytes[:]); err != nil {
 		return err
 	}
 	if _, err := rand.Read(secretBytes[:]); err != nil {
 		return err
 	}
-	cfg := relayConfig{Endpoint: strings.TrimRight(u.String(), "/"), HostID: base64.RawURLEncoding.EncodeToString(hostIDBytes[:18])}
+	if _, err := rand.Read(tokenBytes[:]); err != nil {
+		return err
+	}
+	protocol := 1
+	if runtime.GOOS == "windows" {
+		protocol = 2
+	}
+	cfg := relayConfig{Endpoint: strings.TrimRight(u.String(), "/"), HostID: base64.RawURLEncoding.EncodeToString(hostIDBytes[:18]), Protocol: protocol}
 	secret := base64.RawURLEncoding.EncodeToString(secretBytes[:])
+	token := secret
+	if protocol >= 2 {
+		token = base64.RawURLEncoding.EncodeToString(tokenBytes[:])
+	}
 	if err := keyring.Set(keyringService, relayConfigKey, mustJSON(cfg)); err != nil {
 		return fmt.Errorf("could not save relay settings in the OS keychain: %w", err)
 	}
 	if err := keyring.Set(keyringService, relaySecretKey, secret); err != nil {
 		return fmt.Errorf("could not save relay secret in the OS keychain: %w", err)
 	}
-	encoded, err := encodePairingCode(cfg, secret)
+	if protocol >= 2 {
+		if err := keyring.Set(keyringService, relayAuthTokenKey, token); err != nil {
+			return fmt.Errorf("could not save relay access token in the OS keychain: %w", err)
+		}
+	}
+	encoded, err := encodePairingCode(cfg, secret, token)
 	if err != nil {
 		return err
 	}
@@ -111,8 +138,16 @@ func initRelay(endpoint string, jsonOutput bool) error {
 	return nil
 }
 
-func encodePairingCode(cfg relayConfig, secret string) (string, error) {
-	code, err := json.Marshal(pairingCode{Version: 1, Endpoint: cfg.Endpoint, HostID: cfg.HostID, Secret: secret})
+func encodePairingCode(cfg relayConfig, secret, token string) (string, error) {
+	version := cfg.Protocol
+	if version == 0 {
+		version = 1
+	}
+	value := pairingCode{Version: version, Endpoint: cfg.Endpoint, HostID: cfg.HostID, Secret: secret}
+	if version >= 2 {
+		value.Token = token
+	}
+	code, err := json.Marshal(value)
 	if err != nil {
 		return "", err
 	}
@@ -128,6 +163,11 @@ func relayStatus(jsonOutput bool) error {
 	if configured {
 		if _, err := keyring.Get(keyringService, relaySecretKey); err != nil {
 			return errors.New("relay secret is unavailable in the OS keychain; run relay init again")
+		}
+		if cfg.Protocol >= 2 {
+			if _, err := keyring.Get(keyringService, relayAuthTokenKey); err != nil {
+				return errors.New("relay access token is unavailable in the OS keychain; run relay init again")
+			}
 		}
 	}
 	if jsonOutput {
@@ -158,7 +198,14 @@ func printPairingCode(jsonOutput bool) error {
 	if err != nil {
 		return errors.New("relay secret is missing from the OS keychain; run relay init again")
 	}
-	encoded, err := encodePairingCode(cfg, secret)
+	token := secret
+	if cfg.Protocol >= 2 {
+		token, err = keyring.Get(keyringService, relayAuthTokenKey)
+		if err != nil {
+			return errors.New("relay access token is missing from the OS keychain; run relay init again")
+		}
+	}
+	encoded, err := encodePairingCode(cfg, secret, token)
 	if err != nil {
 		return err
 	}
@@ -206,23 +253,30 @@ func runRelay() error {
 	if err != nil {
 		return errors.New("relay secret is missing from the OS keychain; run relay init again")
 	}
+	token := secret
+	if cfg.Protocol >= 2 {
+		token, err = keyring.Get(keyringService, relayAuthTokenKey)
+		if err != nil {
+			return errors.New("relay access token is missing from the OS keychain; run relay init again")
+		}
+	}
 	fmt.Println("HerdrWatch relay is connecting. Keep this terminal open; press Ctrl+C to stop.")
 	for {
-		if err := relaySession(cfg, secret); err != nil {
+		if err := relaySession(cfg, secret, token); err != nil {
 			fmt.Fprintln(os.Stderr, "relay disconnected:", err)
 		}
 		time.Sleep(2 * time.Second)
 	}
 }
 
-func relaySession(cfg relayConfig, secret string) error {
+func relaySession(cfg relayConfig, secret, token string) error {
 	u, err := url.Parse(cfg.Endpoint)
 	if err != nil {
 		return err
 	}
 	u.Path = strings.TrimRight(u.Path, "/") + "/v1/" + cfg.HostID + "/host"
 	req, _ := http.NewRequest(http.MethodGet, u.String(), nil)
-	req.Header.Set("Authorization", "Bearer "+secret)
+	req.Header.Set("Authorization", "Bearer "+token)
 	ws, _, err := websocket.DefaultDialer.Dial(u.String(), req.Header)
 	if err != nil {
 		return err
@@ -239,6 +293,10 @@ func relaySession(cfg relayConfig, secret string) error {
 		}
 		switch string(message) {
 		case "PEER_CONNECTED":
+			if cfg.Protocol >= 2 {
+				fmt.Println("HerdrWatch connected. Serving encrypted Herdr requests locally.")
+				return relayDirectStream(ws, secret)
+			}
 			fmt.Println("HerdrWatch connected. Opening the local SSH connection.")
 			return relaySSHStream(ws)
 		case "PEER_DISCONNECTED":
@@ -247,6 +305,222 @@ func relaySession(cfg relayConfig, secret string) error {
 			return errors.New("relay sent an unknown control message")
 		}
 	}
+}
+
+type directRequest struct {
+	Version   int             `json:"version"`
+	ID        string          `json:"id"`
+	Kind      string          `json:"kind"`
+	Challenge string          `json:"challenge"`
+	Session   string          `json:"session,omitempty"`
+	Payload   json.RawMessage `json:"payload,omitempty"`
+}
+type directResponse struct {
+	Version   int    `json:"version"`
+	ID        string `json:"id"`
+	Type      string `json:"type,omitempty"`
+	Challenge string `json:"challenge,omitempty"`
+	OK        bool   `json:"ok"`
+	Data      []byte `json:"data,omitempty"`
+	Error     string `json:"error,omitempty"`
+}
+
+func relayDirectStream(ws *websocket.Conn, secret string) error {
+	key, err := directKey(secret)
+	if err != nil {
+		return err
+	}
+	challengeBytes := make([]byte, 32)
+	if _, err := rand.Read(challengeBytes); err != nil {
+		return err
+	}
+	challenge := base64.RawURLEncoding.EncodeToString(challengeBytes)
+	hello, err := json.Marshal(directResponse{Version: 2, Type: "ready", Challenge: challenge})
+	if err != nil {
+		return err
+	}
+	helloFrame, err := encryptDirect(key, hello)
+	if err != nil {
+		return err
+	}
+	if err := ws.WriteMessage(websocket.BinaryMessage, helloFrame); err != nil {
+		return err
+	}
+	seen := make(map[string]struct{})
+	for {
+		kind, frame, err := ws.ReadMessage()
+		if err != nil {
+			return err
+		}
+		if kind == websocket.TextMessage {
+			if string(frame) == "PEER_DISCONNECTED" {
+				return errors.New("HerdrWatch disconnected")
+			}
+			if string(frame) == "PEER_CONNECTED" {
+				continue
+			}
+			return errors.New("relay sent an unknown control message")
+		}
+		if kind != websocket.BinaryMessage {
+			return errors.New("relay sent a non-binary encrypted request")
+		}
+		plain, err := decryptDirect(key, frame)
+		if err != nil {
+			return errors.New("could not authenticate the encrypted phone request")
+		}
+		var request directRequest
+		if err := json.Unmarshal(plain, &request); err != nil || request.Version != 2 || request.ID == "" || len(request.ID) > 80 || request.Challenge != challenge {
+			return errors.New("phone sent an invalid Herdr request")
+		}
+		response := directResponse{Version: 2, ID: request.ID, OK: true}
+		if _, duplicate := seen[request.ID]; duplicate {
+			response.OK = false
+			response.Error = "duplicate request rejected"
+		} else {
+			seen[request.ID] = struct{}{}
+			response.Data, err = runDirectRequest(request)
+		}
+		if err != nil {
+			response.OK = false
+			response.Error = err.Error()
+		}
+		encoded, err := json.Marshal(response)
+		if err != nil {
+			return err
+		}
+		ciphertext, err := encryptDirect(key, encoded)
+		if err != nil {
+			return err
+		}
+		if err := ws.WriteMessage(websocket.BinaryMessage, ciphertext); err != nil {
+			return err
+		}
+	}
+}
+
+func directKey(secret string) ([]byte, error) {
+	decoded, err := base64.RawURLEncoding.DecodeString(secret)
+	if err != nil || len(decoded) != 32 {
+		return nil, errors.New("relay secret is invalid")
+	}
+	seed := append([]byte("herdrwatch-direct-v2\x00"), decoded...)
+	sum := sha256.Sum256(seed)
+	return sum[:], nil
+}
+
+func encryptDirect(key, plain []byte) ([]byte, error) {
+	block, err := aes.NewCipher(key)
+	if err != nil {
+		return nil, err
+	}
+	gcm, err := cipher.NewGCM(block)
+	if err != nil {
+		return nil, err
+	}
+	nonce := make([]byte, gcm.NonceSize())
+	if _, err := rand.Read(nonce); err != nil {
+		return nil, err
+	}
+	return gcm.Seal(nonce, nonce, plain, []byte("herdrwatch-direct-v2")), nil
+}
+
+func decryptDirect(key, frame []byte) ([]byte, error) {
+	block, err := aes.NewCipher(key)
+	if err != nil {
+		return nil, err
+	}
+	gcm, err := cipher.NewGCM(block)
+	if err != nil {
+		return nil, err
+	}
+	if len(frame) < gcm.NonceSize()+gcm.Overhead() {
+		return nil, errors.New("short encrypted frame")
+	}
+	nonce := frame[:gcm.NonceSize()]
+	return gcm.Open(nil, nonce, frame[gcm.NonceSize():], []byte("herdrwatch-direct-v2"))
+}
+
+var safeSession = regexp.MustCompile(`^[A-Za-z0-9_-]{1,128}$`)
+var directMethods = map[string]bool{
+	"hello": true, "terminal.list": true, "doc.get": true, "terminal.read": true,
+	"terminal.send": true, "session.snapshot": true, "agent.read": true, "agent.prompt": true,
+}
+
+func runDirectRequest(request directRequest) ([]byte, error) {
+	herdr, err := exec.LookPath("herdr")
+	if err != nil {
+		return nil, errors.New("Herdr was not found in this Windows account's PATH")
+	}
+	switch request.Kind {
+	case "runtime":
+		return []byte("herdr-api-bridge-v1"), nil
+	case "sessions":
+		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+		defer cancel()
+		command := exec.CommandContext(ctx, herdr, "session", "list", "--json")
+		output, err := command.Output()
+		if err != nil {
+			return nil, fmt.Errorf("could not list Herdr sessions: %w", err)
+		}
+		return boundedOutput(output)
+	case "api":
+		if err := validateDirectAPIRequest(request.Session, request.Payload); err != nil {
+			return nil, err
+		}
+		args := []string{}
+		if request.Session != "" && request.Session != "default" {
+			if !safeSession.MatchString(request.Session) {
+				return nil, errors.New("unsupported Herdr session name")
+			}
+			args = append(args, "--session", request.Session)
+		}
+		args = append(args, "remote-api-bridge")
+		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+		defer cancel()
+		command := exec.CommandContext(ctx, herdr, args...)
+		command.Stdin = bytes.NewReader(append(append([]byte(nil), request.Payload...), '\n'))
+		output, err := command.Output()
+		if err != nil {
+			return nil, fmt.Errorf("Herdr bridge failed: %w", err)
+		}
+		return firstJSONLine(output)
+	default:
+		return nil, errors.New("unsupported host operation")
+	}
+}
+
+func validateDirectAPIRequest(session string, payload []byte) error {
+	if session != "" && session != "default" && !safeSession.MatchString(session) {
+		return errors.New("unsupported Herdr session name")
+	}
+	var envelope struct {
+		ID     string `json:"id"`
+		Method string `json:"method"`
+	}
+	if err := json.Unmarshal(payload, &envelope); err != nil || envelope.ID == "" || len(envelope.ID) > 80 || !directMethods[envelope.Method] {
+		return errors.New("unsupported Herdr API operation")
+	}
+	return nil
+}
+
+func boundedOutput(output []byte) ([]byte, error) {
+	if len(output) > 700*1024 {
+		return nil, errors.New("Herdr response exceeded the encrypted relay response limit")
+	}
+	return output, nil
+}
+
+func firstJSONLine(output []byte) ([]byte, error) {
+	if len(output) > 700*1024 {
+		return nil, errors.New("Herdr response exceeded the encrypted relay response limit")
+	}
+	if index := bytes.IndexByte(output, '\n'); index >= 0 {
+		output = output[:index]
+	}
+	if len(bytes.TrimSpace(output)) == 0 {
+		return nil, errors.New("Herdr returned an empty response")
+	}
+	return bytes.TrimSpace(output), nil
 }
 
 func relaySSHStream(ws *websocket.Conn) error {

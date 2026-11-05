@@ -180,7 +180,7 @@ jobs:
             - **macOS:** Universal DMG installer for Apple Silicon and Intel Macs. It contains the native HerdrWatch Host menu-bar app.
             - **Windows:** NSIS setup installer for x64 Windows. This is a complete installer, not the raw application executable.
 
-            Windows requires OpenSSH Server and Herdr installed for the same Windows account. Windows agent-session discovery is early and still needs broader host validation.
+            Windows requires Herdr installed for the signed-in Windows account; OpenSSH Server and inbound firewall rules are not required. macOS uses the SSH relay and requires Remote Login.
             The installers are not code-signed or notarized; Windows SmartScreen or macOS Gatekeeper may show a first-run warning.
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
