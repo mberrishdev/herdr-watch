@@ -25,6 +25,33 @@ struct Host: Codable, Equatable {
     }
 }
 
+struct HerdrConnection: Codable, Equatable, Identifiable {
+    var id = UUID()
+    var name: String
+    var host: Host
+    var title: String { name.isEmpty ? (host.usesRelay ? "Encrypted relay" : host.address) : name }
+}
+
+struct ConnectionLibrary: Codable {
+    var connections: [HerdrConnection] = []
+    var activeID: UUID?
+    var active: HerdrConnection? { connections.first { $0.id == activeID } }
+
+    static func load(from defaults: UserDefaults) -> Self {
+        if let data = defaults.data(forKey: "connections"),
+           var library = try? JSONDecoder().decode(Self.self, from: data) {
+            if library.active == nil { library.activeID = library.connections.first?.id }
+            return library
+        }
+        if let data = defaults.data(forKey: "host"),
+           let host = try? JSONDecoder().decode(Host.self, from: data), host.isConfigured {
+            let connection = HerdrConnection(name: "", host: host)
+            return Self(connections: [connection], activeID: connection.id)
+        }
+        return Self()
+    }
+}
+
 struct RelayPairing: Decodable {
     let version: Int
     let endpoint: String

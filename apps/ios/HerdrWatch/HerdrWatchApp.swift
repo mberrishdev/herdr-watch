@@ -5,15 +5,21 @@ import SwiftUI
     init() {
         #if DEBUG
         if ProcessInfo.processInfo.environment["HERDRWATCH_PREVIEW"] == "1" {
+            let sampleHost: Host
+            if ProcessInfo.processInfo.environment["HERDRWATCH_RELAY_PREVIEW"] == "1" {
+                sampleHost = Host(username: "developer", relayEndpoint: "wss://relay.example.workers.dev", relayHostID: "preview-relay-host-identifier")
+            } else {
+                sampleHost = Host(address: "sample.tailnet", port: 22, username: "developer")
+            }
+            let previewDefaults = UserDefaults(suiteName: "dev.herdr.HerdrWatch.preview")!
+            previewDefaults.removePersistentDomain(forName: "dev.herdr.HerdrWatch.preview")
+            let sample = HerdrConnection(name: "Sample Mac", host: sampleHost)
+            let other = HerdrConnection(name: "Work Mac", host: Host(username: "developer", relayEndpoint: "wss://relay.example.workers.dev", relayHostID: "work-preview-host-identifier"))
+            previewDefaults.set(try? JSONEncoder().encode(ConnectionLibrary(connections: [sample, other], activeID: sample.id)), forKey: "connections")
             let store = WatchStore(transport: PreviewTransport(
                 core: ProcessInfo.processInfo.environment["HERDRWATCH_CORE_PREVIEW"] == "1",
                 prompts: ProcessInfo.processInfo.environment["HERDRWATCH_PROMPT_PREVIEW"] == "1"
-            ))
-            if ProcessInfo.processInfo.environment["HERDRWATCH_RELAY_PREVIEW"] == "1" {
-                store.host = Host(username: "developer", relayEndpoint: "wss://relay.example.workers.dev", relayHostID: "preview-relay-host-identifier")
-            } else {
-                store.host = Host(address: "sample.tailnet", port: 22, username: "developer")
-            }
+            ), defaults: previewDefaults)
             store.isPreview = true
             if ProcessInfo.processInfo.environment["HERDRWATCH_CONNECTING_PREVIEW"] == "1" {
                 store.busy = true
@@ -29,7 +35,7 @@ import SwiftUI
         WindowGroup {
             #if DEBUG
             if ProcessInfo.processInfo.environment["HERDRWATCH_SETTINGS_PREVIEW"] == "1" {
-                HostSettings().environmentObject(store)
+                ConnectionSettings().environmentObject(store)
             } else if ProcessInfo.processInfo.environment["HERDRWATCH_OUTPUT_PREVIEW"] == "1" {
                 OutputPreviewRoot().environmentObject(store)
             } else { Dashboard().environmentObject(store) }
@@ -188,7 +194,7 @@ struct Dashboard: View {
                 if ProcessInfo.processInfo.environment["HERDRWATCH_SETTINGS"] != nil { settings = true }
                 #endif
             }
-            .sheet(isPresented: $settings) { HostSettings().environmentObject(store) }
+            .sheet(isPresented: $settings) { ConnectionSettings().environmentObject(store) }
             .onChange(of: store.snapshot?.workspaces.map(\.id)) { _, ids in
                 if let selectedWorkspaceID, ids?.contains(selectedWorkspaceID) != true { self.selectedWorkspaceID = nil }
             }
@@ -214,12 +220,25 @@ struct Dashboard: View {
                     .font(.system(size: 18, weight: .semibold)).foregroundStyle(store.connected ? .green : .secondary)
                     .frame(width: 44, height: 44).background((store.connected ? Color.green : Color.secondary).opacity(0.13), in: RoundedRectangle(cornerRadius: 15))
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(store.connected ? "Connected" : "Your Herdr host").font(.headline)
-                    Text(store.host.usesRelay ? "\(store.host.username) · Encrypted relay" : store.host.address.isEmpty ? "Add one SSH host to get started" : "\(store.host.username)@\(store.host.address) · SSH \(store.host.port)")
+                    Text(store.activeConnection?.title ?? (store.connected ? "Connected" : "Your Herdr host")).font(.headline)
+                    Text(store.host.usesRelay ? "\(store.host.username) · Encrypted relay" : store.host.address.isEmpty ? "Add a connection to get started" : "\(store.host.username)@\(store.host.address) · SSH \(store.host.port)")
                         .font(.subheadline).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle)
                 }
                 Spacer(minLength: 0)
                 if store.isPreview { Text("SAMPLE").font(.caption2.weight(.bold)).tracking(0.8).foregroundStyle(.orange) }
+            }
+            if store.connections.count > 1 {
+                Menu {
+                    ForEach(store.connections) { connection in
+                        Button {
+                            Task { await store.activateConnection(connection.id) }
+                        } label: {
+                            Label(connection.title, systemImage: connection.id == store.library.activeID ? "checkmark.circle.fill" : "network")
+                        }
+                    }
+                } label: {
+                    Label("Switch connection", systemImage: "arrow.left.arrow.right").font(.subheadline.weight(.medium))
+                }.disabled(store.busy || store.refreshInProgress)
             }
             if store.connected, let observed = store.observed {
                 HStack(spacing: 6) {
@@ -332,7 +351,7 @@ struct Dashboard: View {
             Image("HerdrMark").resizable().scaledToFit().frame(width: 52, height: 52)
                 .clipShape(RoundedRectangle(cornerRadius: 14))
             Text("Your agents, at a glance").font(.title3.weight(.semibold))
-            Text("Connect to one Herdr host over SSH to see workspaces and agent status.")
+            Text("Save your Herdr connections and switch between hosts to see their workspaces and agents.")
                 .font(.subheadline).foregroundStyle(.secondary).multilineTextAlignment(.center)
             Button("Set up SSH host") { settings = true }.buttonStyle(.borderedProminent)
         }.frame(maxWidth: .infinity).padding(22).glassPanel(cornerRadius: 26)
@@ -341,9 +360,67 @@ struct Dashboard: View {
 extension WatchStore {
     func connectOrRefresh() async { if connected { await refresh() } else { await connect() } }
 }
-struct HostSettings: View {
+struct ConnectionSettings: View {
     @EnvironmentObject var store: WatchStore
     @Environment(\.dismiss) private var dismiss
+    @State private var removing: HerdrConnection?
+    var body: some View {
+        NavigationStack {
+            List {
+                Section {
+                    ForEach(store.connections) { connection in
+                        VStack(alignment: .leading, spacing: 10) {
+                            HStack {
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text(connection.title).font(.headline)
+                                    Text(connection.host.usesRelay ? "\(connection.host.username) · Encrypted relay" : "\(connection.host.username)@\(connection.host.address):\(connection.host.port)")
+                                        .font(.caption).foregroundStyle(.secondary)
+                                }
+                                Spacer()
+                                if connection.id == store.library.activeID {
+                                    Label("Active", systemImage: "checkmark.circle.fill").font(.caption).foregroundStyle(.green)
+                                }
+                            }
+                            HStack {
+                                if connection.id != store.library.activeID {
+                                    Button("Use connection") { Task { await store.activateConnection(connection.id); dismiss() } }
+                                        .buttonStyle(.borderless)
+                                }
+                                NavigationLink("Edit") { HostSettings(connection: connection).environmentObject(store) }
+                                Spacer()
+                                Button("Remove", role: .destructive) { removing = connection }.buttonStyle(.borderless)
+                            }.font(.subheadline)
+                        }.padding(.vertical, 5)
+                    }
+                    NavigationLink { HostSettings().environmentObject(store) } label: {
+                        Label("Add connection", systemImage: "plus.circle.fill")
+                    }
+                } header: { Text("Saved connections") } footer: {
+                    Text("One connection is active at a time. Switching clears the previous host’s sessions and agent output. Removing a connection keeps its device Keychain credentials.")
+                }
+            }
+            .disabled(store.busy || store.refreshInProgress)
+            .navigationTitle("Connections")
+            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Close") { dismiss() } } }
+            .confirmationDialog("Remove \(removing?.title ?? "connection")?", isPresented: Binding(get: { removing != nil }, set: { if !$0 { removing = nil } }), titleVisibility: .visible) {
+                Button("Remove connection", role: .destructive) {
+                    if let removing { Task { await store.removeConnection(removing.id) } }
+                    removing = nil
+                }
+            }
+        }
+        #if os(macOS)
+        .frame(minWidth: 380, minHeight: 550)
+        #endif
+    }
+}
+
+struct HostSettings: View {
+    var connection: HerdrConnection? = nil
+    @EnvironmentObject var store: WatchStore
+    @Environment(\.dismiss) private var dismiss
+    @State private var connectionName = ""
+    @State private var saving = false
     @State private var host = Host()
     @State private var port = "22"
     @State private var password = ""
@@ -353,11 +430,11 @@ struct HostSettings: View {
     @State private var hasSavedPassword: Bool?
     private var pairingCodeIsValid: Bool { (try? RelayPairing.decode(pairingCode)) != nil }
     var body: some View {
-        NavigationStack {
-            ZStack {
+        ZStack {
                 GlassBackdrop()
                 ScrollView {
                     VStack(alignment: .leading, spacing: 16) {
+                        LabeledInput(title: "CONNECTION NAME", placeholder: "My Mac", text: $connectionName)
                         VStack(alignment: .leading, spacing: 7) {
                             Text("Connect your host").font(.largeTitle.weight(.bold))
                             Text("Connect through HerdrWatch’s encrypted relay.").font(.subheadline).foregroundStyle(.secondary)
@@ -467,6 +544,7 @@ struct HostSettings: View {
                         VStack(alignment: .leading, spacing: 10) {
                             cardHeading("Verify before connecting", subtitle: "On first connection, compare the server fingerprint with a trusted source. Your password is withheld until you trust it.", symbol: "checkmark.shield")
                         }.padding(17).glassPanel(cornerRadius: 24)
+                        if connection?.id == store.library.activeID, connection != nil {
                         DisclosureGroup("Advanced local data") {
                             VStack(alignment: .leading, spacing: 12) {
                                 Button("Clear in-memory snapshot") { store.clearCache() }
@@ -474,17 +552,15 @@ struct HostSettings: View {
                                 Button("Delete saved SSH password", role: .destructive) { Task { await store.deletePassword(); hasSavedPassword = try? Vault.contains(host.passwordAccount) } }
                             }.padding(.top, 12)
                         }.font(.subheadline.weight(.medium)).padding(16).glassPanel(cornerRadius: 20)
+                        }
                         if let message = store.message { Label(message, systemImage: "exclamationmark.circle").font(.subheadline).foregroundStyle(.orange).padding(14).glassPanel(cornerRadius: 18) }
                     }.padding(.horizontal, 18).padding(.top, 10).padding(.bottom, 18)
                 }
             }
-            .navigationTitle("Connection")
+            .navigationTitle(connection == nil ? "Add connection" : "Edit connection")
             #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
             #endif
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("Close") { dismiss() } }
-            }
             #if os(iOS)
             .sheet(isPresented: $scannerPresented) {
                 PairingScannerSheet {
@@ -502,13 +578,14 @@ struct HostSettings: View {
                     .background(.ultraThinMaterial)
             }
             .onAppear {
-                host = store.host; port = String(host.port)
+                host = connection?.host ?? Host(); port = String(host.port)
+                connectionName = connection?.name ?? ""
             }
             .onChange(of: pairingCode) { _, value in
                 if value != scannedPairingCode { scannedPairingCode = nil }
             }
             .task(id: host.passwordAccount) { hasSavedPassword = try? Vault.contains(host.passwordAccount) }
-        }
+            .disabled(saving || store.busy || store.refreshInProgress)
         #if os(macOS)
         .frame(minWidth: 340, minHeight: 550)
         #endif
@@ -524,10 +601,10 @@ struct HostSettings: View {
         }
     }
     private func saveHost() {
+        guard !saving, !store.busy, !store.refreshInProgress else { return }
         guard let number = Int(port) else { store.message = "Enter a numeric port."; return }
         host.port = number
         do {
-            let previousRelayAccount = store.host.usesRelay ? store.host.relaySecretAccount : nil
             var incomingRelaySecret: String?
             if !pairingCode.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 let pairing = try RelayPairing.decode(pairingCode)
@@ -538,11 +615,17 @@ struct HostSettings: View {
             }
             try host.validate()
             if let incomingRelaySecret { try Vault.save(Data(incomingRelaySecret.utf8), account: host.relaySecretAccount) }
-            if let previousRelayAccount, previousRelayAccount != host.relaySecretAccount { try Vault.delete(previousRelayAccount) }
             if !password.isEmpty { try Vault.save(Data(password.utf8), account: host.passwordAccount) }
             pairingCode = ""
             password = ""
-            Task { await store.suspend(); store.clearCache(); store.pendingKey = nil; store.host = host; UserDefaults.standard.set(try? JSONEncoder().encode(host), forKey: "host"); dismiss() }
+            saving = true
+            Task {
+                defer { saving = false }
+                do {
+                    try await store.saveConnection(id: connection?.id, name: connectionName, host: host)
+                    dismiss()
+                } catch { store.message = error.localizedDescription }
+            }
         } catch { store.message = error.localizedDescription }
     }
 }

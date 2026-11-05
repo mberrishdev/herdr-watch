@@ -4,6 +4,7 @@ struct OutputScope: Equatable {
     let host: Host
     let session: String
     let coreIdentity: String?
+    var connectionID: UUID? = nil
 }
 struct OutputTarget {
     let agent: Agent
