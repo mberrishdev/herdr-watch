@@ -13,6 +13,16 @@ the signed NSIS update package after you choose **Install**. Release builds requ
 `TAURI_SIGNING_PRIVATE_KEY`, `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`, and
 `TAURI_SIGNING_PUBLIC_KEY` GitHub Actions secrets.
 
+The header shows the installed application version, including prerelease suffixes
+such as `0.1.1-beta.5`. Stable builds check the latest stable release's
+`latest.json`. Beta, alpha, and release candidate builds check the rolling
+`updates-beta` release's `latest.json`, which the release workflow updates after
+publishing each prerelease. That metadata points to the signed installer in the
+versioned release. Older builds with the stable feed built in need a manual
+installer update once to switch to the prerelease feed. The old stable v0.1.0
+release has no updater metadata; a new signed stable release is needed to make
+its stable feed available.
+
 The native macOS host uses Sparkle to check for updates automatically and
 shows its standard install prompt when a signed update is available. You can
 also choose **Check for Updates…** in the host manager or menu bar popover.

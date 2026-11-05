@@ -1,4 +1,5 @@
 import QRCode from "qrcode";
+import { getVersion } from "@tauri-apps/api/app";
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { check } from "@tauri-apps/plugin-updater";
@@ -22,6 +23,7 @@ let updateMessage = "";
 let updateAvailable = false;
 let updateChecking = false;
 let updateStatus = "";
+let appVersion = "";
 let herdrReadiness: HerdrReadiness | null = null;
 let herdrBusy = false;
 const isWindows = navigator.userAgent.includes("Windows");
@@ -55,7 +57,7 @@ function render() {
     <main class="shell">
       <header class="topbar">
         <div class="brand"><div class="brand-mark"><img src="/herdr-mark.png" alt="" /></div><div><strong>HerdrWatch</strong><span>HOST MANAGER</span></div></div>
-        <span class="platform">${isWindows ? "WINDOWS" : "DESKTOP"}</span>
+        <span class="platform">${isWindows ? "WINDOWS" : "DESKTOP"}${appVersion ? ` · Version ${esc(appVersion)}` : ""}</span>
       </header>
       <section class="hero">
         <div class="eyebrow"><span class="pulse ${viewState}"></span> PRIVATE CONNECTION</div>
@@ -205,6 +207,10 @@ async function stopRelay() {
 function addActivity(line: string) { activity.push(line); if (activity.length > 20) activity.shift(); }
 
 render();
+void getVersion().then((version) => { appVersion = version; render(); }).catch((error) => {
+  addActivity(`Could not read the installed version: ${String(error)}`);
+  render();
+});
 void refreshStatus();
 void checkHerdrReadiness();
 void checkForUpdates();

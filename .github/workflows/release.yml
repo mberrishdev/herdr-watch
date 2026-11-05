@@ -117,6 +117,9 @@ jobs:
           $config.version = $env:VERSION.Substring(1)
           $config.bundle.createUpdaterArtifacts = $true
           $config.plugins.updater.pubkey = $env:TAURI_SIGNING_PUBLIC_KEY
+          if ($env:VERSION -match '-(beta|alpha|rc)([.-]|$)') {
+            $config.plugins.updater.endpoints = @("https://github.com/${{ github.repository }}/releases/download/updates-beta/latest.json")
+          }
           $configPath = Join-Path $env:RUNNER_TEMP "tauri.release.conf.json"
           $config | ConvertTo-Json -Depth 20 | Set-Content $configPath
           npm run tauri:build -- --bundles nsis --config $configPath
@@ -182,3 +185,16 @@ jobs:
             The installers are not code-signed or notarized; Windows SmartScreen or macOS Gatekeeper may show a first-run warning.
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Publish the Windows prerelease update feed
+        if: contains(github.ref_name, '-beta') || contains(github.ref_name, '-alpha') || contains(github.ref_name, '-rc')
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          if ! gh release view updates-beta; then
+            gh release create updates-beta --target "$GITHUB_SHA" --prerelease --latest=false \
+              --title "Windows beta update feed" \
+              --notes "Update metadata for Windows prerelease installs. Download installers from the versioned releases."
+          fi
+          gh release upload updates-beta release-assets/latest.json --clobber
