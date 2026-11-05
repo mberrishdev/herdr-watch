@@ -86,8 +86,9 @@ Commands:
   run     Keep the configured cloudflared tunnel connected in this terminal.
   remove  Delete the HerdrWatch route and tunnel from Cloudflare.
 
-Relay commands use the shared HerdrWatch encrypted SSH relay; they do not
-require Cloudflare One/WARP on the phone. relay init prints a pairing code.
+Relay commands use the shared encrypted relay; Windows pairings send fixed,
+encrypted Herdr API operations, while macOS pairings carry the SSH stream.
+They do not require Cloudflare One/WARP on the phone. relay init prints a pairing code.
 The HerdrWatchHost Mac app can create the QR and manage the relay process.
 
 The legacy Cloudflare Tunnel flow requires the iPhone to enroll in the
@@ -236,7 +237,16 @@ func doctor() error {
 		}
 	}
 	if runtime.GOOS == "windows" {
-		fmt.Println("OpenSSH Server is an optional Windows feature; enable it if HerdrWatch will connect using SSH.")
+		if path, err := exec.LookPath("herdr"); err == nil {
+			cmd := exec.Command(path, "remote-api-bridge", "--check")
+			if output, checkErr := cmd.CombinedOutput(); checkErr == nil && strings.TrimSpace(string(output)) == "herdr-api-bridge-v1" {
+				fmt.Printf("Herdr direct bridge: available (%s)\n", path)
+			} else {
+				fmt.Println("Herdr direct bridge: found but not available")
+			}
+		} else {
+			fmt.Println("Herdr direct bridge: herdr not found in PATH")
+		}
 	}
 	return nil
 }

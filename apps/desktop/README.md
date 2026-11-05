@@ -35,16 +35,16 @@ releases.
 ## Windows host requirements
 
 - Windows 10/11 with WebView2 Runtime.
-- The optional **OpenSSH Server** Windows feature enabled and its `sshd`
-  service running. HerdrWatch does not install Windows services or change
-  firewall rules for you.
-- Herdr installed for the Windows account that owns the SSH connection, and
-  available on the SSH command PATH.
+- Herdr installed for the signed-in Windows account and `herdr` available in
+  that account's PATH. The manager checks `herdr remote-api-bridge --check`.
+- No OpenSSH Server, inbound firewall rule, or Windows service is required.
 
-The app guides relay pairing, but the Windows Herdr session and agent bridge
-has not yet been validated against every Herdr distribution. The current
-mobile SSH profile is validated on macOS/Linux hosts; Windows end-to-end
-session discovery remains an acceptance item.
+Windows pairing uses protocol v2: the iPhone and bundled Go companion exchange
+AES-GCM encrypted Herdr requests over the shared relay. The companion invokes
+only a fixed set of Herdr API operations locally; it does not accept shell
+commands from the phone. The relay sees connection timing and traffic size,
+but not the request or response payloads. The Mac manager continues to use the
+SSH relay profile.
 
 ## Build on Windows
 

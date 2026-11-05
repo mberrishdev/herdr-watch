@@ -41,21 +41,25 @@ herdrwatch-host relay init --endpoint wss://herdrwatch-relay.<account>.workers.d
 ```
 
 In HerdrWatch, open Settings → Connections → Add connection → Encrypted relay and scan the QR
-shown in the terminal (or paste the text pairing code). Enter the SSH username
-and password, then save. On the Mac,
-enable Remote Login and start the local companion:
+shown in the terminal (or paste the text pairing code). On Mac, enter the SSH
+username and password; enable Remote Login and start the local companion:
 
 ```sh
 herdrwatch-host relay run
 ```
 
 Keep it running while connected. The companion and app can be anywhere with
-internet access; neither needs Cloudflare One/WARP or a Cloudflare login. The
-phone still verifies the SSH host fingerprint on first connection. Treat the
-pairing code as a password: anyone holding it can attempt SSH authentication
-to that paired computer. Re-pair the host if the code is exposed.
+internet access; neither needs Cloudflare One/WARP or a Cloudflare login. On
+macOS the phone verifies the SSH host fingerprint on first connection. On
+Windows, pairing uses the direct Herdr bridge; no SSH server, inbound port or
+firewall rule is needed. In both flows the pairing secret grants access to the
+paired host, so treat the code like a password and re-pair if it is exposed.
 
-SwiftUI iPhone app with multiple saved Herdr connections and one active SSH host at a time. It discovers Herdr sessions and agents, reads live terminal screens, and provides an inline field to send an explicit instruction to a detected agent. Requires iOS 17+, ordinary SSH password authentication, and either **Herdr desktop / herdr-core 0.1.16 (generation 1)** or **upstream Herdr 0.9.5 (protocol 22)** on the remote SSH PATH. The shared relay is an optional Cloudflare Worker deployed once by the HerdrWatch publisher; SSH remains encrypted end to end.
+SwiftUI iPhone app with multiple saved Herdr connections. It discovers sessions
+and agents, reads terminal screens, and can send an explicit instruction to a
+detected agent. The Mac path uses SSH; the Windows path uses an encrypted direct
+bridge with upstream Herdr. The shared relay is an optional Cloudflare Worker
+deployed once by the HerdrWatch publisher.
 
 ## Host manager scope
 
@@ -65,7 +69,12 @@ Cloudflare One/WARP.
 
 ## Desktop downloads
 
-Download the latest [HerdrWatch Host release](https://github.com/mberrishdev/herdr-watch/releases/latest). It includes a universal DMG for Apple Silicon and Intel Macs and a full Windows x64 setup installer. The Windows installer is an NSIS setup wizard, not a standalone app executable. Windows requires OpenSSH Server and Herdr installed for the same account.
+Download the latest [HerdrWatch Host release](https://github.com/mberrishdev/herdr-watch/releases/latest). It includes a universal DMG for Apple Silicon and Intel Macs and a full Windows x64 setup installer. The Windows installer is an NSIS setup wizard, not a standalone app executable. Windows requires Herdr installed for the same account; OpenSSH Server is not required.
+
+On macOS, install the latest stable release with `./install.sh`, or choose the
+latest published beta, alpha, or release candidate with `./install.sh --beta`.
+The script downloads and verifies the release DMG, then installs the app under
+`~/Applications`.
 
 ## Repository layout
 
@@ -99,12 +108,11 @@ Passwords, relay secrets and trusted keys keep their existing device Keychain
 scopes. Removing a saved connection retains these credentials; use the active
 connection’s advanced settings to delete its password or forget its trusted key.
 
-1. Install the host companion and follow [the shared relay setup](#shared-relay-no-vpn-app-on-iphone). Paste the generated pairing code into Host settings. This connects through the publisher's shared relay and does not require a phone VPN.
-2. Enter your SSH username and password. Passwords are saved only in device-only Keychain, scoped to host and username. The SSH server must allow password authentication; keyboard-interactive/MFA login is not implemented. SSH credentials grant your host account's authority.
-3. Save, connect, and compare the displayed host-key SHA-256 fingerprint using an independent trusted channel before trusting it. For example, inspect the relevant host public key with `ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub -E sha256` on the host.
-4. Choose a running session. Refresh manually or leave the app active for 15-second foreground polling. Tap an agent row to open its real terminal screen.
+1. Install HerdrWatch Host and follow [the shared relay setup](#shared-relay-no-vpn-app-on-iphone). Scan its pairing QR in Host settings. This uses the publisher's relay and does not require a phone VPN.
+2. On Mac, enter your SSH username and password, then verify the SSH host-key fingerprint through an independent channel. On Windows, HerdrWatch Host talks to Herdr for the signed-in user; SSH credentials and host-key trust are not used.
+3. Choose a running session. Refresh manually or leave the app active for 15-second foreground polling. Tap an agent row to open its real terminal screen.
 
-Unknown host keys abort the handshake before authentication and require explicit trust plus a new connection. Changed keys fail closed; independently verify rotation before using Forget trusted host key. Passwords and exact trusted public keys use non-synchronizing `WhenUnlockedThisDeviceOnly` Keychain records. Host address/port/username alone use preferences. The inline agent input is available by default; each send is explicit. No output/snapshot is persisted, no credentials or host output are logged, and no agent forwarding is enabled. Delete saved SSH password removes the locally stored password.
+On the Mac SSH path, unknown keys abort before authentication and changed keys fail closed. Passwords and trusted public keys use non-synchronizing `WhenUnlockedThisDeviceOnly` Keychain records. On Windows, the pairing secret encrypts each API request and response end to end; the relay forwards ciphertext only. The inline agent input is available by default; each send is explicit. No output or snapshot is persisted, and no credentials or host output are logged.
 
 On macOS/Linux, the fixed SSH launcher prepends `$HOME/.local/bin`, `/opt/homebrew/bin`, and `/usr/local/bin` to the remote PATH before executing `herdr`. It does not load interactive shell startup files or accept an arbitrary executable/command.
 
