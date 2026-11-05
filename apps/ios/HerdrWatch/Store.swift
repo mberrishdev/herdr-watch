@@ -106,6 +106,28 @@ enum PromptResponse {
         self.host = host
         persistConnections()
     }
+    /// Credentials are scoped to the incoming host. Saving a second computer
+    /// must never delete the active computer's pairing or password.
+    func savePairedConnection(id: UUID?, name: String, host: Host, pairingCode: String, password: String,
+                              saveCredential: (Data, String) throws -> Void = { try Vault.save($0, account: $1) }) async throws {
+        guard !busy, !refreshInProgress else { throw WatchError.message("Wait for the current connection operation to finish.") }
+        var incoming = host
+        let pairing = pairingCode.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : try RelayPairing.decode(pairingCode)
+        if let pairing {
+            incoming.address = ""
+            incoming.port = 22
+            incoming.relayEndpoint = pairing.endpoint
+            incoming.relayHostID = pairing.host_id
+            incoming.relayProtocol = pairing.version
+        }
+        try incoming.validate()
+        if let pairing {
+            try saveCredential(Data(pairing.secret.utf8), incoming.relaySecretAccount)
+            if let token = pairing.token { try saveCredential(Data(token.utf8), incoming.relayTokenAccount) }
+        }
+        if !password.isEmpty { try saveCredential(Data(password.utf8), incoming.passwordAccount) }
+        try await saveConnection(id: id, name: name, host: incoming)
+    }
     func activateConnection(_ id: UUID) async {
         guard !busy, !refreshInProgress, let connection = connections.first(where: { $0.id == id }), library.activeID != id else { return }
         busy = true

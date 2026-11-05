@@ -29,8 +29,8 @@ WebSocket form, `wss://herdrwatch-relay.<account>.workers.dev`.
 
 In Xcode, choose the **HerdrWatchHost** scheme and run it on your Mac. The
 menu-bar app can create the pairing QR, start or stop the relay, and show
-whether the paired iPhone is connected. Scan the QR in HerdrWatch → Settings →
-Connections → Add connection, then start the relay in the Mac app. You do not need to keep a
+whether the paired iPhone is connected. Scan the QR in HerdrWatch → Computers →
+Add computer, then start the relay in the Mac app. You do not need to keep a
 Terminal window open.
 
 The companion CLI remains available for setup and troubleshooting. Build
@@ -40,9 +40,10 @@ The companion CLI remains available for setup and troubleshooting. Build
 herdrwatch-host relay init --endpoint wss://herdrwatch-relay.<account>.workers.dev
 ```
 
-In HerdrWatch, open Settings → Connections → Add connection → Encrypted relay and scan the QR
-shown in the terminal (or paste the text pairing code). On Mac, enter the SSH
-username and password; enable Remote Login and start the local companion:
+In HerdrWatch, open Computers → Add computer and scan the QR
+shown in the terminal (or expand **Paste pairing code instead**). On Mac, enter
+the SSH username and password and enable Remote Login. Tap **Save and connect**
+when ready, and start the local companion:
 
 ```sh
 herdrwatch-host relay run
@@ -99,16 +100,17 @@ The **HerdrWatchHost** scheme builds the Mac menu-bar manager from `apps/macos-h
 
 ## Connect
 
-Open **Settings → Connections → Add connection** to save a named direct SSH or
-encrypted relay connection. Use **Switch connection** on the dashboard or
-**Use connection** in Settings to change the active host. Each connection can
-be edited or removed; the existing single-host setting migrates automatically.
+Open **Computers → Add computer** to save a named direct SSH or
+encrypted relay connection. Use **Switch computer** on the dashboard or
+tap a computer in **Computers** to change the active host. Use the info button
+to edit a computer, or swipe to remove it. The existing single-host setting
+migrates automatically.
 Switching clears sessions and terminal output before connecting to the next host.
 Passwords, relay secrets and trusted keys keep their existing device Keychain
 scopes. Removing a saved connection retains these credentials; use the active
 connection’s advanced settings to delete its password or forget its trusted key.
 
-1. Install HerdrWatch Host and follow [the shared relay setup](#shared-relay-no-vpn-app-on-iphone). Scan its pairing QR in Host settings. This uses the publisher's relay and does not require a phone VPN.
+1. Install HerdrWatch Host and follow [the shared relay setup](#shared-relay-no-vpn-app-on-iphone). Scan its pairing QR in **Computers → Add computer**. This uses the publisher's relay and does not require a phone VPN.
 2. On Mac, enter your SSH username and password, then verify the SSH host-key fingerprint through an independent channel. On Windows, HerdrWatch Host talks to Herdr for the signed-in user; SSH credentials and host-key trust are not used.
 3. Choose a running session. Refresh manually or leave the app active for 15-second foreground polling. Tap an agent row to open its real terminal screen.
 

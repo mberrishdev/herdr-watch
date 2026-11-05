@@ -77,6 +77,57 @@ final class HerdrWatchTests: XCTestCase {
         await reloaded.removeConnection(try XCTUnwrap(reloaded.activeConnection?.id))
         XCTAssertTrue(WatchStore(transport: PreviewTransport(), defaults: defaults).connections.isEmpty)
     }
+    @MainActor func testPairingTwoComputersPreservesBothCredentialScopes() async throws {
+        let suite = "PairingTests-" + UUID().uuidString
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let store = WatchStore(transport: PreviewTransport(), defaults: defaults)
+        var credentials: [String: Data] = [:]
+        func code(_ hostID: String, version: Int) throws -> String {
+            var payload: [String: Any] = ["version": version, "endpoint": "wss://relay.example",
+                                          "host_id": hostID, "secret": Data(repeating: 1, count: 32).base64EncodedString()]
+            if version == 2 { payload["token"] = Data(repeating: 2, count: 32).base64EncodedString() }
+            return try JSONSerialization.data(withJSONObject: payload).base64EncodedString()
+        }
+        try await store.savePairedConnection(id: nil, name: "Mac", host: Host(username: "alice"),
+            pairingCode: code("first-computer-identifier", version: 1), password: "mac-password",
+            saveCredential: { credentials[$1] = $0 })
+        let first = try XCTUnwrap(store.activeConnection)
+        let firstCredentials = credentials
+        try await store.savePairedConnection(id: nil, name: "Windows", host: Host(),
+            pairingCode: code("second-computer-identifier", version: 2), password: "",
+            saveCredential: { credentials[$1] = $0 })
+        let second = try XCTUnwrap(store.activeConnection)
+        XCTAssertEqual(store.connections.count, 2)
+        XCTAssertEqual(second.host.relayProtocol, 2)
+        XCTAssertNotNil(credentials[second.host.relayTokenAccount])
+        XCTAssertNotEqual(first.host.relaySecretAccount, second.host.relaySecretAccount)
+        for (account, value) in firstCredentials { XCTAssertEqual(credentials[account], value) }
+        store.isPreview = true
+        await store.activateConnection(first.id)
+        XCTAssertEqual(store.host, first.host)
+        await store.activateConnection(second.id)
+        XCTAssertEqual(store.host, second.host)
+    }
+    @MainActor func testInvalidPairingAndCredentialFailureDoNotSaveComputer() async throws {
+        let suite = "PairingFailureTests-" + UUID().uuidString
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let store = WatchStore(transport: PreviewTransport(), defaults: defaults)
+        var writes = 0
+        do {
+            try await store.savePairedConnection(id: nil, name: "Invalid", host: Host(), pairingCode: "invalid", password: "",
+                saveCredential: { _, _ in writes += 1 })
+            XCTFail("Invalid pairing must fail before saving credentials")
+        } catch { }
+        XCTAssertEqual(writes, 0)
+        do {
+            try await store.savePairedConnection(id: nil, name: "Mac", host: Host(address: "mac.local", username: "alice"),
+                pairingCode: "", password: "password", saveCredential: { _, _ in throw WatchError.message("Keychain unavailable") })
+            XCTFail("Credential failure must keep the library unchanged")
+        } catch { }
+        XCTAssertTrue(store.connections.isEmpty)
+    }
     func testPasswordProfileCompatibilityAndScope() throws {
         let old = try JSONDecoder().decode(Host.self, from: Data(#"{"address":"server","port":22,"username":"alice"}"#.utf8))
         let passwordHost = old
