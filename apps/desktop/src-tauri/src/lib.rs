@@ -24,8 +24,12 @@ fn herdr_readiness() -> Result<HerdrReadiness, String> {
         let script = r#"
 $herdr = Get-Command herdr -ErrorAction SilentlyContinue
 $bridge = ''
-if ($null -ne $herdr) { $bridge = (& herdr remote-api-bridge --check 2>$null | Out-String).Trim() }
-[PSCustomObject]@{ herdr_available = ($bridge -eq 'herdr-api-bridge-v1') } | ConvertTo-Json -Compress
+$available = $false
+if ($null -ne $herdr) {
+  $bridge = (& herdr remote-api-bridge --check 2>$null | Out-String).Trim()
+  $available = ($LASTEXITCODE -eq 0 -and $bridge -eq 'herdr-api-bridge-v1')
+}
+[PSCustomObject]@{ herdrAvailable = $available } | ConvertTo-Json -Compress
 "#;
         let output = std::process::Command::new("powershell.exe")
             .args(["-NoProfile", "-NonInteractive", "-Command", script])
@@ -37,6 +41,18 @@ if ($null -ne $herdr) { $bridge = (& herdr remote-api-bridge --check 2>$null | O
     #[cfg(not(windows))]
     {
         Err("Windows Herdr checks are only available on Windows.".into())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::HerdrReadiness;
+
+    #[test]
+    fn readiness_deserializes_the_windows_response_field() {
+        let readiness: HerdrReadiness = serde_json::from_str(r#"{"herdrAvailable":true}"#).unwrap();
+        assert!(readiness.herdr_available);
+        assert!(serde_json::from_str::<HerdrReadiness>(r#"{"herdr_available":true}"#).is_err());
     }
 }
 
