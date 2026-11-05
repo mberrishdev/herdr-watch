@@ -57,6 +57,10 @@ enum PromptResponse {
     private var coreIdentity: String?
     private var coreCanRead = false
     private var coreCanPrompt = false
+    @Published private(set) var library: ConnectionLibrary
+    private let defaults: UserDefaults
+    var connections: [HerdrConnection] { library.connections }
+    var activeConnection: HerdrConnection? { library.active }
     @Published var host: Host
     @Published var sessions: [Session] = []
     @Published var selected: String?
@@ -69,14 +73,72 @@ enum PromptResponse {
     @Published var message: String?
     @Published var pendingKey: String?
     private var generation = UUID()
-    private var refreshInProgress = false
+    @Published private(set) var refreshInProgress = false
     private let transport: SSHTransport
     func permitsPrompt(status: String) -> Bool {
         return status == "idle" || status == "done"
     }
-    init(transport: SSHTransport? = nil) {
+    init(transport: SSHTransport? = nil, defaults: UserDefaults = .standard) {
         self.transport = transport ?? CitadelTransport()
-        host = (UserDefaults.standard.data(forKey: "host").flatMap { try? JSONDecoder().decode(Host.self, from: $0) }) ?? Host()
+        self.defaults = defaults
+        let loaded = ConnectionLibrary.load(from: defaults)
+        library = loaded
+        host = loaded.active?.host ?? Host()
+        persistConnections()
+    }
+    private func persistConnections() {
+        guard !isPreview, let data = try? JSONEncoder().encode(library) else { return }
+        defaults.set(data, forKey: "connections")
+        defaults.removeObject(forKey: "host")
+    }
+    func saveConnection(id: UUID?, name: String, host: Host) async throws {
+        guard !busy, !refreshInProgress else { throw WatchError.message("Wait for the current connection operation to finish.") }
+        try host.validate()
+        let connection = HerdrConnection(id: id ?? UUID(), name: name.trimmingCharacters(in: .whitespacesAndNewlines), host: host)
+        busy = true
+        defer { busy = false }
+        await suspend()
+        clearConnectionState()
+        if let index = library.connections.firstIndex(where: { $0.id == connection.id }) {
+            library.connections[index] = connection
+        } else { library.connections.append(connection) }
+        library.activeID = connection.id
+        self.host = host
+        persistConnections()
+    }
+    func activateConnection(_ id: UUID) async {
+        guard !busy, !refreshInProgress, let connection = connections.first(where: { $0.id == id }), library.activeID != id else { return }
+        busy = true
+        await suspend()
+        clearConnectionState()
+        library.activeID = id
+        host = connection.host
+        persistConnections()
+        busy = false
+        await connect()
+    }
+    func removeConnection(_ id: UUID) async {
+        guard !busy, !refreshInProgress else { return }
+        busy = true
+        defer { busy = false }
+        if library.activeID == id {
+            await suspend()
+            clearConnectionState()
+            library.connections.removeAll { $0.id == id }
+            library.activeID = connections.first?.id
+            host = library.active?.host ?? Host()
+        } else { library.connections.removeAll { $0.id == id } }
+        persistConnections()
+    }
+    private func clearConnectionState() {
+        clearCache()
+        pendingKey = nil
+        message = nil
+        runtimeLabel = ""
+        coreProfile = false
+        coreIdentity = nil
+        coreCanRead = false
+        coreCanPrompt = false
     }
     func connect() async {
         guard !busy, !refreshInProgress else { return }
@@ -94,7 +156,7 @@ enum PromptResponse {
                 self?.connectionProgress = step
             }
             guard generation == attempt else { await transport.disconnect(); return }
-            if !isPreview { UserDefaults.standard.set(try JSONEncoder().encode(host), forKey: "host") }
+            persistConnections()
             connected = true
             stage = .bridge
             connectionProgress = "Checking Herdr on the Mac…"
@@ -164,7 +226,7 @@ enum PromptResponse {
         observed = Date()
         if stale { stale = false }
     }
-    var outputScope: OutputScope { OutputScope(host: host, session: selected ?? "default", coreIdentity: coreIdentity) }
+    var outputScope: OutputScope { OutputScope(host: host, session: selected ?? "default", coreIdentity: coreIdentity, connectionID: library.activeID) }
     func readOutput(for target: OutputTarget) async throws -> TerminalOutput? {
         guard connected, !busy, !refreshInProgress else { return nil }
         guard target.scope == outputScope else { throw WatchError.message("The host or session changed. Go back and open the current agent.") }

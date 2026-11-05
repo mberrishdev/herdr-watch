@@ -6,6 +6,77 @@ import Crypto
 @testable import HerdrWatchPreview
 
 final class HerdrWatchTests: XCTestCase {
+    @MainActor func testConnectionMigrationSwitchingAndRemoval() async throws {
+        let suite = "HerdrConnectionsTests-" + UUID().uuidString
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let original = Host(address: "first.example", username: "alice")
+        defaults.set(try JSONEncoder().encode(original), forKey: "host")
+        let store = WatchStore(transport: PreviewTransport(), defaults: defaults)
+        store.isPreview = true
+        XCTAssertEqual(store.connections.count, 1)
+        XCTAssertEqual(store.host, original)
+        XCTAssertNil(defaults.data(forKey: "host"))
+        let firstID = try XCTUnwrap(store.activeConnection?.id)
+        let second = Host(address: "second.example", username: "bob")
+        store.pendingKey = "old-host-key"
+        try await store.saveConnection(id: nil, name: " Work Mac ", host: second)
+        let secondID = try XCTUnwrap(store.activeConnection?.id)
+        XCTAssertEqual(store.connections.count, 2)
+        XCTAssertEqual(store.activeConnection?.title, "Work Mac")
+        XCTAssertNil(store.pendingKey)
+        await store.connect()
+        let agent = try XCTUnwrap(store.snapshot?.agents.first)
+        let oldTarget = OutputTarget(agent: agent, scope: store.outputScope)
+        await store.activateConnection(firstID)
+        XCTAssertEqual(store.host, original)
+        do {
+            _ = try await store.readOutput(for: oldTarget)
+            XCTFail("An output target from another connection must be rejected")
+        } catch { }
+        try await store.saveConnection(id: firstID, name: "Home", host: original)
+        XCTAssertEqual(store.connections.count, 2)
+        XCTAssertNil(store.snapshot)
+        XCTAssertTrue(store.sessions.isEmpty)
+        XCTAssertNil(store.selected)
+        XCTAssertEqual(store.runtimeLabel, "")
+        await store.removeConnection(firstID)
+        XCTAssertEqual(store.activeConnection?.id, secondID)
+        XCTAssertEqual(store.host, second)
+        await store.removeConnection(secondID)
+        XCTAssertTrue(store.connections.isEmpty)
+        XCTAssertFalse(store.host.isConfigured)
+        XCTAssertFalse(store.connected)
+    }
+    @MainActor func testConnectionsPersistAndRejectInvalidEdits() async throws {
+        let suite = "HerdrConnectionsTests-" + UUID().uuidString
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let store = WatchStore(transport: PreviewTransport(), defaults: defaults)
+        let relay = Host(username: "alice", relayEndpoint: "wss://relay.example", relayHostID: "abcdefghijklmnop")
+        try await store.saveConnection(id: nil, name: "Relay", host: relay)
+        try await store.saveConnection(id: nil, name: "SSH", host: Host(address: "host.example", username: "bob"))
+        let restored = WatchStore(transport: PreviewTransport(), defaults: defaults)
+        XCTAssertEqual(restored.connections, store.connections)
+        XCTAssertEqual(restored.activeConnection, store.activeConnection)
+        do {
+            try await restored.saveConnection(id: nil, name: "Invalid", host: Host())
+            XCTFail("An invalid connection must not be saved")
+        } catch { }
+        XCTAssertEqual(restored.connections.count, 2)
+        restored.busy = true
+        await restored.activateConnection(try XCTUnwrap(restored.connections.first?.id))
+        await restored.removeConnection(try XCTUnwrap(restored.activeConnection?.id))
+        XCTAssertEqual(restored.activeConnection, store.activeConnection)
+        XCTAssertEqual(restored.connections.count, 2)
+        restored.busy = false
+        await restored.removeConnection(try XCTUnwrap(restored.activeConnection?.id))
+        let reloaded = WatchStore(transport: PreviewTransport(), defaults: defaults)
+        XCTAssertEqual(reloaded.host, relay)
+        XCTAssertEqual(reloaded.connections.count, 1)
+        await reloaded.removeConnection(try XCTUnwrap(reloaded.activeConnection?.id))
+        XCTAssertTrue(WatchStore(transport: PreviewTransport(), defaults: defaults).connections.isEmpty)
+    }
     func testPasswordProfileCompatibilityAndScope() throws {
         let old = try JSONDecoder().decode(Host.self, from: Data(#"{"address":"server","port":22,"username":"alice"}"#.utf8))
         let passwordHost = old
@@ -118,14 +189,14 @@ extension HerdrWatchTests {
         let client = CitadelTransport(passwordProvider: { _ in "fixture-only" })
         let wire = String(openSSHPublicKey: privateKey.publicKey)
         do {
-            try await client.connect(host: host, trustedKey: nil)
+            try await client.connect(host: host, trustedKey: nil, progress: { _ in })
             XCTFail("Unknown host key must stop before password authentication")
         } catch let error as WatchError {
             guard case .trust(let observed) = error else { return XCTFail("Wrong trust error: \(error)") }
             XCTAssertEqual(observed, wire)
         } catch { XCTFail("First trust was lost by SSH stack: \(String(reflecting: error))") }
         do {
-            try await client.connect(host: host, trustedKey: wire)
+            try await client.connect(host: host, trustedKey: wire, progress: { _ in })
             let probe = try await client.execute(.probe)
             XCTAssertEqual(String(decoding: probe, as: UTF8.self), "herdr-api-bridge-v1\n")
             do {
@@ -147,14 +218,14 @@ extension HerdrWatchTests {
             await client.disconnect()
         } catch { XCTFail("Pinned password login failed: \(String(reflecting: error))") }
         do {
-            try await client.connect(host: host, trustedKey: "changed-host-key")
+            try await client.connect(host: host, trustedKey: "changed-host-key", progress: { _ in })
             XCTFail("Changed host key must fail closed")
         } catch let error as WatchError {
             guard case .changed = error else { return XCTFail("Expected changed host key") }
         }
         let wrongPassword = CitadelTransport(passwordProvider: { _ in "wrong-fixture-password" })
         do {
-            try await wrongPassword.connect(host: host, trustedKey: wire)
+            try await wrongPassword.connect(host: host, trustedKey: wire, progress: { _ in })
             XCTFail("Incorrect password must be rejected")
         } catch {
             XCTAssertTrue(ConnectionFailure.message(error, stage: .ssh).contains("rejected"))

@@ -30,7 +30,7 @@ WebSocket form, `wss://herdrwatch-relay.<account>.workers.dev`.
 In Xcode, choose the **HerdrWatchHost** scheme and run it on your Mac. The
 menu-bar app can create the pairing QR, start or stop the relay, and show
 whether the paired iPhone is connected. Scan the QR in HerdrWatch → Settings →
-Connection, then start the relay in the Mac app. You do not need to keep a
+Connections → Add connection, then start the relay in the Mac app. You do not need to keep a
 Terminal window open.
 
 The companion CLI remains available for setup and troubleshooting. Build
@@ -40,7 +40,7 @@ The companion CLI remains available for setup and troubleshooting. Build
 herdrwatch-host relay init --endpoint wss://herdrwatch-relay.<account>.workers.dev
 ```
 
-In HerdrWatch, open Settings → Connection → Encrypted relay and scan the QR
+In HerdrWatch, open Settings → Connections → Add connection → Encrypted relay and scan the QR
 shown in the terminal (or paste the text pairing code). Enter the SSH username
 and password, then save. On the Mac,
 enable Remote Login and start the local companion:
@@ -55,7 +55,7 @@ phone still verifies the SSH host fingerprint on first connection. Treat the
 pairing code as a password: anyone holding it can attempt SSH authentication
 to that paired computer. Re-pair the host if the code is exposed.
 
-Small SwiftUI iPhone MVP for one existing SSH host. It discovers Herdr sessions and agents, reads live terminal screens, and provides an inline field to send an explicit instruction to a detected agent. Requires iOS 17+, ordinary SSH password authentication, and either **Herdr desktop / herdr-core 0.1.16 (generation 1)** or **upstream Herdr 0.9.5 (protocol 22)** on the remote SSH PATH. The shared relay is an optional Cloudflare Worker deployed once by the HerdrWatch publisher; SSH remains encrypted end to end.
+SwiftUI iPhone app with multiple saved Herdr connections and one active SSH host at a time. It discovers Herdr sessions and agents, reads live terminal screens, and provides an inline field to send an explicit instruction to a detected agent. Requires iOS 17+, ordinary SSH password authentication, and either **Herdr desktop / herdr-core 0.1.16 (generation 1)** or **upstream Herdr 0.9.5 (protocol 22)** on the remote SSH PATH. The shared relay is an optional Cloudflare Worker deployed once by the HerdrWatch publisher; SSH remains encrypted end to end.
 
 ## Host manager scope
 
@@ -89,6 +89,15 @@ xcodebuild -project HerdrWatch.xcodeproj -scheme HerdrWatch -sdk iphonesimulator
 The **HerdrWatchHost** scheme builds the Mac menu-bar manager from `apps/macos-host/` and embeds a universal Go companion for Apple Silicon and Intel Macs. Building that target requires Go and Xcode's `lipo` tool.
 
 ## Connect
+
+Open **Settings → Connections → Add connection** to save a named direct SSH or
+encrypted relay connection. Use **Switch connection** on the dashboard or
+**Use connection** in Settings to change the active host. Each connection can
+be edited or removed; the existing single-host setting migrates automatically.
+Switching clears sessions and terminal output before connecting to the next host.
+Passwords, relay secrets and trusted keys keep their existing device Keychain
+scopes. Removing a saved connection retains these credentials; use the active
+connection’s advanced settings to delete its password or forget its trusted key.
 
 1. Install the host companion and follow [the shared relay setup](#shared-relay-no-vpn-app-on-iphone). Paste the generated pairing code into Host settings. This connects through the publisher's shared relay and does not require a phone VPN.
 2. Enter your SSH username and password. Passwords are saved only in device-only Keychain, scoped to host and username. The SSH server must allow password authentication; keyboard-interactive/MFA login is not implemented. SSH credentials grant your host account's authority.
