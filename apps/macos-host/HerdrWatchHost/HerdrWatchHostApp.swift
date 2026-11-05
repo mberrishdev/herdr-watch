@@ -545,8 +545,13 @@ private struct HostMenuBarView: View {
                     .buttonStyle(.borderedProminent).frame(maxWidth: .infinity)
             }
 
-            Button("Check for Updates…") { updates.checkForUpdates() }
-                .buttonStyle(.borderless).font(.caption)
+            HStack {
+                Button("Check for Updates…") { updates.checkForUpdates() }
+                Spacer()
+                Button("Quit HerdrWatch Host") { NSApplication.shared.terminate(nil) }
+                    .keyboardShortcut("q", modifiers: .command)
+            }
+            .buttonStyle(.borderless).font(.caption)
         }
         .padding(14)
         .frame(width: 292)
